@@ -1,0 +1,35 @@
+import express from 'express';
+import cors from 'cors';
+import healthRoutes from './routes/health.routes';
+import recetasRoutes from './routes/recetas.routes';
+import ingredientesRoutes from './routes/ingredientes.routes';
+import recetaIngredientesRoutes from './routes/receta-ingredientes.routes';
+import recomendacionesRoutes from './routes/recomendaciones.routes';
+
+const app = express();
+const PORT = 3000;
+
+app.use(cors());
+app.use(express.json());
+app.use('/api', healthRoutes);
+app.use('/api/recetas', recetasRoutes);
+app.use('/api/ingredientes', ingredientesRoutes);
+app.use('/api/recetas', recetaIngredientesRoutes);
+app.use('/api/recomendaciones', recomendacionesRoutes);
+
+app.get('/', (_req, res) => {
+  res.json({
+    mensaje: 'API de Recetas Mexicanas funcionando correctamente',
+  });
+});
+
+app.get('/api/health', (_req, res) => {
+  res.json({
+    estado: 'correcto',
+    mensaje: 'El servidor está funcionando',
+  });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Servidor iniciado en el puerto ${PORT}`);
+});
