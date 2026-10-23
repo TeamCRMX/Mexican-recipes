@@ -4,7 +4,6 @@ import {
   Alert,
   SafeAreaView,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -24,25 +23,11 @@ type Receta = {
   equipos: string[];
 };
 
-const ingredientesDisponibles = [
-  'Tomate',
-  'Cebolla',
-  'Ajo',
-  'Chile',
-  'Cilantro',
-  'Papa',
-  'Zanahoria',
-  'Calabacita',
-  'Elote',
-  'Frijoles',
-  'Arroz',
-  'Huevo',
-  'Queso',
-  'Pollo',
-  'Carne de res',
-  'Tortillas',
-  'Aguacate',
-  'Limón',
+const ingredientes = [
+  'Tomate', 'Cebolla', 'Ajo', 'Chile', 'Cilantro', 'Papa',
+  'Zanahoria', 'Calabacita', 'Elote', 'Frijoles', 'Arroz',
+  'Huevo', 'Queso', 'Pollo', 'Carne de res', 'Tortillas',
+  'Aguacate', 'Limón',
 ];
 
 const recetas: Receta[] = [
@@ -59,11 +44,11 @@ const recetas: Receta[] = [
   {
     id: 2,
     nombre: 'Guacamole',
-    descripcion: 'Preparación tradicional mexicana a base de aguacate.',
+    descripcion: 'Preparación mexicana a base de aguacate.',
     ingredientes: ['Aguacate', 'Tomate', 'Cebolla', 'Cilantro', 'Limón', 'Chile'],
     tiempo: '10 minutos',
     dificultad: 'Fácil',
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Tenedor', 'Recipiente'],
+    utensilios: ['Cuchillo', 'Tenedor', 'Recipiente'],
     equipos: [],
   },
   {
@@ -73,13 +58,13 @@ const recetas: Receta[] = [
     ingredientes: ['Arroz', 'Tomate', 'Ajo', 'Cebolla'],
     tiempo: '30 minutos',
     dificultad: 'Media',
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Olla', 'Cuchara'],
+    utensilios: ['Olla', 'Cuchara', 'Cuchillo'],
     equipos: ['Estufa', 'Licuadora'],
   },
   {
     id: 4,
     nombre: 'Quesadillas de queso',
-    descripcion: 'Tortillas rellenas de queso y calentadas hasta derretirlo.',
+    descripcion: 'Tortillas rellenas de queso derretido.',
     ingredientes: ['Tortillas', 'Queso'],
     tiempo: '10 minutos',
     dificultad: 'Fácil',
@@ -89,7 +74,7 @@ const recetas: Receta[] = [
   {
     id: 5,
     nombre: 'Caldo de pollo con verduras',
-    descripcion: 'Caldo casero de pollo acompañado de verduras.',
+    descripcion: 'Caldo casero de pollo con verduras.',
     ingredientes: ['Pollo', 'Papa', 'Zanahoria', 'Calabacita', 'Cebolla', 'Ajo'],
     tiempo: '60 minutos',
     dificultad: 'Media',
@@ -99,11 +84,11 @@ const recetas: Receta[] = [
   {
     id: 6,
     nombre: 'Frijoles guisados',
-    descripcion: 'Frijoles preparados con un toque de ajo y cebolla.',
+    descripcion: 'Frijoles preparados con ajo y cebolla.',
     ingredientes: ['Frijoles', 'Cebolla', 'Ajo'],
     tiempo: '20 minutos',
     dificultad: 'Fácil',
-    utensilios: ['Olla', 'Cuchara', 'Cuchillo'],
+    utensilios: ['Olla', 'Cuchara'],
     equipos: ['Estufa'],
   },
 ];
@@ -111,7 +96,7 @@ const recetas: Receta[] = [
 export default function App() {
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
-  const [recetaSeleccionada, setRecetaSeleccionada] = useState<Receta | null>(null);
+  const [recetaActual, setRecetaActual] = useState<Receta | null>(null);
 
   const resultados = recetas
     .map((receta) => {
@@ -130,7 +115,7 @@ export default function App() {
     .filter((resultado) => resultado.porcentaje > 0)
     .sort((a, b) => b.porcentaje - a.porcentaje);
 
-  function alternarIngrediente(ingrediente: string) {
+  function cambiarIngrediente(ingrediente: string) {
     setSeleccionados((actuales) =>
       actuales.includes(ingrediente)
         ? actuales.filter((item) => item !== ingrediente)
@@ -140,358 +125,180 @@ export default function App() {
 
   function buscarRecetas() {
     if (seleccionados.length === 0) {
-      Alert.alert(
-        'Selecciona ingredientes',
-        'Elige al menos un ingrediente para buscar recetas.'
-      );
+      Alert.alert('Selecciona ingredientes', 'Elige al menos un ingrediente para continuar.');
       return;
     }
-
     setPantalla('resultados');
   }
 
-  function mostrarDetalle(receta: Receta) {
-    setRecetaSeleccionada(receta);
+  function abrirDetalle(receta: Receta) {
+    setRecetaActual(receta);
     setPantalla('detalle');
   }
 
-  function volverAIngredientes() {
-    setPantalla('ingredientes');
-  }
-
   return (
-    <SafeAreaView style={estilos.contenedor}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f4f8f2" />
+    <SafeAreaView style={styles.container}>
+      {pantalla === 'inicio' && (
+        <View style={styles.inicio}>
+          <Text style={styles.emoji}>🌮</Text>
+          <Text style={styles.titulo}>Recetas mexicanas</Text>
+          <Text style={styles.descripcion}>
+            Descubre qué platillos mexicanos puedes preparar con los ingredientes que tienes en casa.
+          </Text>
+          <TouchableOpacity style={styles.boton} onPress={() => setPantalla('ingredientes')}>
+            <Text style={styles.textoBoton}>Seleccionar ingredientes</Text>
+          </TouchableOpacity>
+          <Text style={styles.pie}>El sabor de México en tu cocina</Text>
+        </View>
+      )}
 
-      <ScrollView contentContainerStyle={estilos.contenido}>
-        <Text style={estilos.titulo}>Recetas mexicanas</Text>
+      {pantalla === 'ingredientes' && (
+        <View style={styles.contenido}>
+          <TouchableOpacity onPress={() => setPantalla('inicio')} style={styles.volver}>
+            <Text style={styles.textoVolver}>‹ Volver al inicio</Text>
+          </TouchableOpacity>
+          <Text style={styles.tituloSeccion}>¿Qué tienes en casa?</Text>
+          <Text style={styles.descripcionSeccion}>
+            Selecciona los ingredientes que tienes disponibles.
+          </Text>
+          <Text style={styles.contador}>
+            Ingredientes seleccionados: {seleccionados.length}
+          </Text>
 
-        {pantalla === 'inicio' && (
-          <View style={estilos.seccion}>
-            <Text style={estilos.subtitulo}>
-              Prepara algo rico con lo que tienes en casa
-            </Text>
-            <Text style={estilos.texto}>
-              Selecciona tus ingredientes y descubre recetas mexicanas que
-              puedes preparar.
-            </Text>
+          <ScrollView style={styles.lista} contentContainerStyle={styles.listaContenido}>
+            {ingredientes.map((ingrediente) => {
+              const seleccionado = seleccionados.includes(ingrediente);
+              return (
+                <TouchableOpacity
+                  key={ingrediente}
+                  style={[styles.ingrediente, seleccionado && styles.ingredienteSeleccionado]}
+                  onPress={() => cambiarIngrediente(ingrediente)}
+                >
+                  <Text style={[styles.textoIngrediente, seleccionado && styles.textoSeleccionado]}>
+                    {seleccionado ? '✓  ' : '+  '}{ingrediente}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
-            <TouchableOpacity
-              style={estilos.boton}
-              onPress={() => setPantalla('ingredientes')}
-            >
-              <Text style={estilos.textoBoton}>Seleccionar ingredientes</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          <TouchableOpacity style={styles.boton} onPress={buscarRecetas}>
+            <Text style={styles.textoBoton}>Buscar recetas</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.limpiar} onPress={() => setSeleccionados([])}>
+            <Text style={styles.textoLimpiar}>Limpiar selección</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-        {pantalla === 'ingredientes' && (
-          <View style={estilos.seccion}>
-            <Text style={estilos.subtitulo}>¿Qué ingredientes tienes?</Text>
-            <Text style={estilos.texto}>
-              Toca los ingredientes disponibles en casa.
-            </Text>
+      {pantalla === 'resultados' && (
+        <View style={styles.contenido}>
+          <TouchableOpacity onPress={() => setPantalla('ingredientes')} style={styles.volver}>
+            <Text style={styles.textoVolver}>‹ Cambiar ingredientes</Text>
+          </TouchableOpacity>
+          <Text style={styles.tituloSeccion}>Recetas recomendadas</Text>
+          <Text style={styles.descripcionSeccion}>
+            Ordenadas según los ingredientes que tienes.
+          </Text>
 
-            <View style={estilos.listaIngredientes}>
-              {ingredientesDisponibles.map((ingrediente) => {
-                const seleccionado = seleccionados.includes(ingrediente);
-
-                return (
-                  <TouchableOpacity
-                    key={ingrediente}
-                    style={[
-                      estilos.ingrediente,
-                      seleccionado && estilos.ingredienteSeleccionado,
-                    ]}
-                    onPress={() => alternarIngrediente(ingrediente)}
-                  >
-                    <Text
-                      style={[
-                        estilos.textoIngrediente,
-                        seleccionado && estilos.textoIngredienteSeleccionado,
-                      ]}
-                    >
-                      {seleccionado ? '✓ ' : '+ '}
-                      {ingrediente}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={estilos.contador}>
-              Ingredientes seleccionados: {seleccionados.length}
-            </Text>
-
-            <TouchableOpacity
-              style={estilos.boton}
-              onPress={buscarRecetas}
-            >
-              <Text style={estilos.textoBoton}>Buscar recetas</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={estilos.botonSecundario}
-              onPress={() => setSeleccionados([])}
-            >
-              <Text style={estilos.textoBotonSecundario}>
-                Limpiar selección
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={() => setPantalla('inicio')}>
-              <Text style={estilos.enlace}>Volver al inicio</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {pantalla === 'resultados' && (
-          <View style={estilos.seccion}>
-            <Text style={estilos.subtitulo}>Recetas recomendadas</Text>
-            <Text style={estilos.texto}>
-              Ordenadas de mayor a menor coincidencia con tus ingredientes.
-            </Text>
-
+          <ScrollView style={styles.lista} contentContainerStyle={styles.listaContenido}>
             {resultados.length === 0 ? (
-              <Text style={estilos.mensaje}>
-                No encontramos recetas con los ingredientes seleccionados.
-                Prueba con otros ingredientes.
-              </Text>
+              <Text style={styles.mensaje}>No encontramos recetas con esos ingredientes. Prueba con otros.</Text>
             ) : (
               resultados.map(({ receta, disponibles, faltantes, porcentaje }) => (
-                <View key={receta.id} style={estilos.tarjeta}>
-                  <Text style={estilos.nombreReceta}>{receta.nombre}</Text>
-                  <Text style={estilos.porcentaje}>{porcentaje}% de coincidencia</Text>
-                  <View style={estilos.fondoProgreso}>
-                    <View
-                      style={[estilos.progreso, { width: `${porcentaje}%` }]}
-                    />
+                <View key={receta.id} style={styles.tarjeta}>
+                  <Text style={styles.nombreReceta}>{receta.nombre}</Text>
+                  <Text style={styles.porcentaje}>{porcentaje}% de coincidencia</Text>
+                  <View style={styles.fondoProgreso}>
+                    <View style={[styles.progreso, { width: `${porcentaje}%` }]} />
                   </View>
-                  <Text style={estilos.texto}>
+                  <Text style={styles.texto}>
+                    Tienes: {disponibles.length ? disponibles.join(', ') : 'Ninguno'}
+                  </Text>
+                  <Text style={styles.faltantes}>
+                    Te faltan: {faltantes.length ? faltantes.join(', ') : 'Ninguno'}
+                  </Text>
+                  <Text style={styles.texto}>
                     Tiempo: {receta.tiempo} · Dificultad: {receta.dificultad}
                   </Text>
-                  <Text style={estilos.texto}>
-                    Tienes: {disponibles.length > 0 ? disponibles.join(', ') : 'Ninguno'}
-                  </Text>
-                  <Text style={estilos.faltantes}>
-                    Te faltan: {faltantes.length > 0 ? faltantes.join(', ') : 'Ninguno'}
-                  </Text>
-
-                  <TouchableOpacity
-                    style={estilos.boton}
-                    onPress={() => mostrarDetalle(receta)}
-                  >
-                    <Text style={estilos.textoBoton}>Ver detalle</Text>
+                  <TouchableOpacity style={styles.boton} onPress={() => abrirDetalle(receta)}>
+                    <Text style={styles.textoBoton}>Ver detalle</Text>
                   </TouchableOpacity>
                 </View>
               ))
             )}
+          </ScrollView>
+        </View>
+      )}
 
-            <TouchableOpacity
-              style={estilos.botonSecundario}
-              onPress={volverAIngredientes}
-            >
-              <Text style={estilos.textoBotonSecundario}>
-                Cambiar ingredientes
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+      {pantalla === 'detalle' && recetaActual && (
+        <View style={styles.contenido}>
+          <TouchableOpacity onPress={() => setPantalla('resultados')} style={styles.volver}>
+            <Text style={styles.textoVolver}>‹ Volver a las recetas</Text>
+          </TouchableOpacity>
+          <ScrollView contentContainerStyle={styles.listaContenido}>
+            <Text style={styles.tituloSeccion}>{recetaActual.nombre}</Text>
+            <Text style={styles.descripcionSeccion}>{recetaActual.descripcion}</Text>
 
-        {pantalla === 'detalle' && recetaSeleccionada && (
-          <View style={estilos.seccion}>
-            <Text style={estilos.subtitulo}>{recetaSeleccionada.nombre}</Text>
-            <Text style={estilos.texto}>{recetaSeleccionada.descripcion}</Text>
-            <Text style={estilos.etiqueta}>Ingredientes necesarios</Text>
-
-            {recetaSeleccionada.ingredientes.map((ingrediente) => {
-              const loTiene = seleccionados.includes(ingrediente);
-
+            <Text style={styles.etiqueta}>Ingredientes necesarios</Text>
+            {recetaActual.ingredientes.map((ingrediente) => {
+              const tiene = seleccionados.includes(ingrediente);
               return (
-                <Text
-                  key={ingrediente}
-                  style={loTiene ? estilos.disponible : estilos.faltante}
-                >
-                  {loTiene ? '✓ Tienes: ' : '• Te falta: '}
-                  {ingrediente}
+                <Text key={ingrediente} style={tiene ? styles.disponible : styles.faltante}>
+                  {tiene ? '✓ Tienes: ' : '• Te falta: '}{ingrediente}
                 </Text>
               );
             })}
 
-            <Text style={estilos.etiqueta}>Utensilios</Text>
-            <Text style={estilos.texto}>
-              {recetaSeleccionada.utensilios.join(', ')}
+            <Text style={styles.etiqueta}>Utensilios</Text>
+            <Text style={styles.texto}>{recetaActual.utensilios.join(', ')}</Text>
+
+            <Text style={styles.etiqueta}>Equipos necesarios</Text>
+            <Text style={styles.texto}>
+              {recetaActual.equipos.length ? recetaActual.equipos.join(', ') : 'No requiere equipo eléctrico especial.'}
             </Text>
 
-            <Text style={estilos.etiqueta}>Equipos necesarios</Text>
-            <Text style={estilos.texto}>
-              {recetaSeleccionada.equipos.length > 0
-                ? recetaSeleccionada.equipos.join(', ')
-                : 'No se requiere equipo eléctrico especial.'}
-            </Text>
-
-            <Text style={estilos.texto}>
-              Tiempo: {recetaSeleccionada.tiempo}
-            </Text>
-            <Text style={estilos.texto}>
-              Dificultad: {recetaSeleccionada.dificultad}
-            </Text>
-
-            <TouchableOpacity
-              style={estilos.boton}
-              onPress={() => setPantalla('resultados')}
-            >
-              <Text style={estilos.textoBoton}>Volver a las recetas</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+            <Text style={styles.etiqueta}>Información de preparación</Text>
+            <Text style={styles.texto}>Tiempo: {recetaActual.tiempo}</Text>
+            <Text style={styles.texto}>Dificultad: {recetaActual.dificultad}</Text>
+          </ScrollView>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
-const estilos = StyleSheet.create({
-  contenedor: {
-    flex: 1,
-    backgroundColor: '#f4f8f2',
-  },
-  contenido: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  titulo: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#245c36',
-    textAlign: 'center',
-    marginVertical: 20,
-  },
-  seccion: {
-    gap: 14,
-  },
-  subtitulo: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#245c36',
-  },
-  texto: {
-    fontSize: 16,
-    color: '#374151',
-    lineHeight: 23,
-  },
-  boton: {
-    backgroundColor: '#2e7d46',
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  textoBoton: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  botonSecundario: {
-    backgroundColor: '#e3eee4',
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  textoBotonSecundario: {
-    color: '#245c36',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  listaIngredientes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  ingrediente: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#b7cbb9',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  ingredienteSeleccionado: {
-    backgroundColor: '#2e7d46',
-    borderColor: '#2e7d46',
-  },
-  textoIngrediente: {
-    color: '#245c36',
-    fontSize: 14,
-  },
-  textoIngredienteSeleccionado: {
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
-  contador: {
-    color: '#245c36',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
-  tarjeta: {
-    backgroundColor: '#ffffff',
-    padding: 16,
-    borderRadius: 12,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#d8e5d8',
-    marginTop: 6,
-  },
-  nombreReceta: {
-    fontSize: 19,
-    fontWeight: 'bold',
-    color: '#245c36',
-  },
-  porcentaje: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#2e7d46',
-  },
-  fondoProgreso: {
-    height: 9,
-    backgroundColor: '#e1e8e1',
-    borderRadius: 5,
-    overflow: 'hidden',
-  },
-  progreso: {
-    height: '100%',
-    backgroundColor: '#2e7d46',
-  },
-  faltantes: {
-    color: '#b45309',
-    fontSize: 14,
-  },
-  mensaje: {
-    padding: 16,
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    color: '#374151',
-    lineHeight: 23,
-  },
-  enlace: {
-    textAlign: 'center',
-    color: '#245c36',
-    fontWeight: 'bold',
-    padding: 12,
-  },
-  etiqueta: {
-    color: '#245c36',
-    fontSize: 17,
-    fontWeight: 'bold',
-    marginTop: 8,
-  },
-  disponible: {
-    color: '#24743b',
-    fontSize: 15,
-    lineHeight: 23,
-  },
-  faltante: {
-    color: '#b45309',
-    fontSize: 15,
-    lineHeight: 23,
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FFF8EE' },
+  inicio: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28 },
+  contenido: { flex: 1, paddingHorizontal: 22, paddingTop: 16, paddingBottom: 12 },
+  emoji: { fontSize: 76, marginBottom: 18 },
+  titulo: { fontSize: 30, fontWeight: 'bold', color: '#28613B', textAlign: 'center', marginBottom: 16 },
+  descripcion: { fontSize: 17, color: '#514B43', textAlign: 'center', lineHeight: 25, marginBottom: 28 },
+  boton: { backgroundColor: '#28613B', paddingVertical: 15, paddingHorizontal: 20, borderRadius: 12, width: '100%', alignItems: 'center', marginTop: 10 },
+  textoBoton: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  pie: { marginTop: 32, color: '#786F64', fontSize: 14 },
+  volver: { marginBottom: 20, alignSelf: 'flex-start' },
+  textoVolver: { color: '#28613B', fontSize: 16, fontWeight: '600' },
+  tituloSeccion: { fontSize: 26, fontWeight: 'bold', color: '#28613B', marginBottom: 8 },
+  descripcionSeccion: { color: '#514B43', fontSize: 15, lineHeight: 22, marginBottom: 16 },
+  contador: { fontSize: 14, color: '#28613B', fontWeight: 'bold', marginBottom: 12 },
+  lista: { flex: 1, marginBottom: 12 },
+  listaContenido: { paddingBottom: 20, gap: 9 },
+  ingrediente: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E3DCCF', padding: 14, borderRadius: 10 },
+  ingredienteSeleccionado: { backgroundColor: '#E1F0E4', borderColor: '#28613B' },
+  textoIngrediente: { fontSize: 16, color: '#514B43' },
+  textoSeleccionado: { color: '#28613B', fontWeight: 'bold' },
+  limpiar: { padding: 12, alignItems: 'center' },
+  textoLimpiar: { color: '#8B3A32', fontSize: 14, fontWeight: '600' },
+  tarjeta: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: '#E3DCCF', gap: 9, marginBottom: 8 },
+  nombreReceta: { fontSize: 19, fontWeight: 'bold', color: '#28613B' },
+  porcentaje: { fontSize: 17, fontWeight: 'bold', color: '#28613B' },
+  fondoProgreso: { height: 9, backgroundColor: '#E3DCCF', borderRadius: 5, overflow: 'hidden' },
+  progreso: { height: '100%', backgroundColor: '#28613B' },
+  texto: { fontSize: 15, color: '#514B43', lineHeight: 23 },
+  faltantes: { color: '#A44B28', fontSize: 15, lineHeight: 23 },
+  mensaje: { backgroundColor: '#FFFFFF', padding: 16, borderRadius: 10, color: '#514B43', lineHeight: 23 },
+  etiqueta: { fontSize: 18, fontWeight: 'bold', color: '#28613B', marginTop: 18, marginBottom: 8 },
+  disponible: { fontSize: 15, color: '#28613B', lineHeight: 24 },
 });
