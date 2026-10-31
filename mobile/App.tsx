@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle';
 
@@ -186,6 +187,15 @@ export default function App() {
   const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
   const [cargando, setCargando] = useState(false);
 
+  const getBackendUrl = () => {
+  const debuggerHost = Constants.expoConfig?.hostUri;
+  if (!debuggerHost) {
+    return 'http://192.168.100.5:3000';
+  }
+  const host = debuggerHost.split(':')[0];
+  return `http://${host}:3000`;
+};
+
   const volver = () => {
     if (pantalla === 'detalle') {
       setPantalla('resultados');
@@ -255,7 +265,7 @@ export default function App() {
 
     try {
       const respuesta = await fetch(
-        'http://192.168.100.5:3000/api/recomendaciones',
+        `${getBackendUrl()}/api/recomendaciones`,
         {
           method: 'POST',
           headers: {
