@@ -188,13 +188,23 @@ export default function App() {
   const [cargando, setCargando] = useState(false);
 
   const getBackendUrl = () => {
-  const debuggerHost = Constants.expoConfig?.hostUri;
-  if (!debuggerHost) {
-    return 'http://192.168.100.5:3000';
-  }
-  const host = debuggerHost.split(':')[0];
-  return `http://${host}:3000`;
-};
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+    if (apiUrl) {
+      return apiUrl.replace(/\/$/, '');
+    }
+
+    const debuggerHost = Constants.expoConfig?.hostUri;
+    const host = debuggerHost?.split(':')[0];
+
+    if (host) {
+      return `http://${host}:3000`;
+    }
+
+    throw new Error(
+      'No se pudo determinar la dirección del backend. Configura EXPO_PUBLIC_API_URL.'
+    );
+  };
 
   const volver = () => {
     if (pantalla === 'detalle') {
