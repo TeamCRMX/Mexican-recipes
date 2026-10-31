@@ -255,7 +255,7 @@ export default function App() {
 
     try {
       const respuesta = await fetch(
-        'http://192.168.100.94:3000/api/recomendaciones',
+  `${process.env.EXPO_PUBLIC_API_URL}/api/recomendaciones`,
         {
           method: 'POST',
           headers: {
