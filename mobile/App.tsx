@@ -183,6 +183,8 @@ export default function App() {
   >([]);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
+  const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
+  const [cargando, setCargando] = useState(false);
 
   const volver = () => {
     if (pantalla === 'detalle') {
@@ -226,40 +228,7 @@ export default function App() {
     setIngredientesSeleccionados([]);
   };
 
-  const obtenerResultados = (): ResultadoReceta[] => {
-    if (ingredientesSeleccionados.length === 0) {
-      return [];
-    }
-
-    return RECETAS.map((receta) => {
-      const disponibles = receta.ingredientes.filter((ingrediente) =>
-        ingredientesSeleccionados.includes(ingrediente),
-      );
-
-      const faltantes = receta.ingredientes.filter(
-        (ingrediente) => !ingredientesSeleccionados.includes(ingrediente),
-      );
-
-      const porcentaje = Math.round(
-        (disponibles.length / receta.ingredientes.length) * 100,
-      );
-
-      return {
-        ...receta,
-        porcentaje,
-        disponibles,
-        faltantes,
-      };
-    })
-      .filter((receta) => receta.disponibles.length > 0)
-      .sort(
-        (a, b) =>
-          b.porcentaje - a.porcentaje ||
-          a.faltantes.length - b.faltantes.length,
-      );
-  };
-
-  const buscarRecetas = () => {
+  const buscarRecetas = async () => {
     if (ingredientesSeleccionados.length === 0) {
       Alert.alert(
         'Selecciona ingredientes',
@@ -268,7 +237,96 @@ export default function App() {
       return;
     }
 
-    setPantalla('resultados');
+    const equivalencias: Record<string, string> = {
+      Tortillas: 'Tortillas de maíz',
+      Maíz: 'Tortillas de maíz',
+      Chile: 'Chile serrano',
+    };
+
+    const ingredientesAPI = [
+      ...new Set(
+        ingredientesSeleccionados.map(
+          (ingrediente) => equivalencias[ingrediente] ?? ingrediente,
+        ),
+      ),
+    ];
+
+    setCargando(true);
+
+    try {
+      const respuesta = await fetch(
+  `${process.env.EXPO_PUBLIC_API_URL}/api/recomendaciones`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ingredientes: ingredientesAPI }),
+        },
+      );
+
+      const datos = await respuesta.json();
+
+      if (!respuesta.ok) {
+        throw new Error(
+          datos.mensaje ?? 'No fue posible obtener las recomendaciones.',
+        );
+      }
+
+      const recomendaciones = (datos.recomendaciones ?? []).map(
+        (item: {
+          id_receta: number;
+          nombre: string;
+          descripcion: string | null;
+          tiempo_preparacion: number | null;
+          dificultad: string | null;
+          porcentajeCoincidencia: number;
+          ingredientesDisponibles: { nombre: string }[];
+          ingredientesFaltantes: { nombre: string }[];
+        }): ResultadoReceta => {
+          const disponibles = item.ingredientesDisponibles.map(
+            (ingrediente) => ingrediente.nombre,
+          );
+          const faltantes = item.ingredientesFaltantes.map(
+            (ingrediente) => ingrediente.nombre,
+          );
+          const recetaLocal = RECETAS.find(
+            (receta) =>
+              receta.nombre.toLocaleLowerCase('es-MX') ===
+              item.nombre.toLocaleLowerCase('es-MX'),
+          );
+
+          return {
+            id: item.id_receta,
+            nombre: item.nombre,
+            descripcion: item.descripcion ?? 'Sin descripción disponible.',
+            tiempo:
+              item.tiempo_preparacion !== null
+                ? `${item.tiempo_preparacion} minutos`
+                : 'No especificado',
+            dificultad: item.dificultad ?? 'No especificada',
+            ingredientes: [...disponibles, ...faltantes],
+            utensilios: recetaLocal?.utensilios ?? [],
+            equipos: recetaLocal?.equipos ?? [],
+            porcentaje: item.porcentajeCoincidencia,
+            disponibles,
+            faltantes,
+          };
+        },
+      );
+
+      setResultadosAPI(recomendaciones);
+      setPantalla('resultados');
+    } catch (error) {
+      Alert.alert(
+        'Error de conexión',
+        error instanceof Error
+          ? error.message
+          : 'No se pudo conectar con el servidor. Comprueba que el backend esté activo y que el celular use la misma red Wi-Fi.',
+      );
+    } finally {
+      setCargando(false);
+    }
   };
 
   const abrirDetalle = (receta: ResultadoReceta) => {
@@ -420,11 +478,14 @@ export default function App() {
         <TouchableOpacity
           style={styles.botonPrincipal}
           onPress={buscarRecetas}
+          disabled={cargando}
           activeOpacity={0.75}
           accessibilityRole="button"
         >
           <Text style={styles.textoBotonPrincipal}>
-            Buscar recetas ({ingredientesSeleccionados.length})
+            {cargando
+              ? 'Buscando recetas...'
+              : `Buscar recetas (${ingredientesSeleccionados.length})`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -432,7 +493,7 @@ export default function App() {
   );
 
   const mostrarResultados = () => {
-    const resultados = obtenerResultados();
+    const resultados = resultadosAPI;
 
     return (
       <View style={styles.contenedorPantalla}>
