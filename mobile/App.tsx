@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle';
 
@@ -186,6 +187,25 @@ export default function App() {
   const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
   const [cargando, setCargando] = useState(false);
 
+  const getBackendUrl = () => {
+    const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+
+    if (apiUrl) {
+      return apiUrl.replace(/\/$/, '');
+    }
+
+    const debuggerHost = Constants.expoConfig?.hostUri;
+    const host = debuggerHost?.split(':')[0];
+
+    if (host) {
+      return `http://${host}:3000`;
+    }
+
+    throw new Error(
+      'No se pudo determinar la dirección del backend. Configura EXPO_PUBLIC_API_URL.'
+    );
+  };
+
   const volver = () => {
     if (pantalla === 'detalle') {
       setPantalla('resultados');
@@ -255,7 +275,7 @@ export default function App() {
 
     try {
       const respuesta = await fetch(
-  `${process.env.EXPO_PUBLIC_API_URL}/api/recomendaciones`,
+        `${getBackendUrl()}/api/recomendaciones`,
         {
           method: 'POST',
           headers: {

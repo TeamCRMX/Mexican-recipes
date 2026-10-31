@@ -1,10 +1,10 @@
 import express from 'express';
 import cors from 'cors';
-import healthRoutes from './routes/health.routes';
-import recetasRoutes from './routes/recetas.routes';
-import ingredientesRoutes from './routes/ingredientes.routes';
-import recetaIngredientesRoutes from './routes/receta-ingredientes.routes';
-import recomendacionesRoutes from './routes/recomendaciones.routes';
+import healthRoutes from './routes/health.routes.js';
+import recetasRoutes from './routes/recetas.routes.js';
+import ingredientesRoutes from './routes/ingredientes.routes.js';
+import recetaIngredientesRoutes from './routes/receta-ingredientes.routes.js';
+import recomendacionesRoutes from './routes/recomendaciones.routes.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
