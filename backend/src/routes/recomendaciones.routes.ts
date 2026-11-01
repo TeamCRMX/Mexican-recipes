@@ -48,9 +48,10 @@ router.post('/', async (req, res) => {
         r.tiempo_preparacion,
         r.dificultad,
         r.imagen,
+        r.categoria,
         i.id_ingrediente,
         i.nombre AS nombre_ingrediente,
-        i.categoria,
+        r.categoria AS categoria_receta,
         ri.cantidad
       FROM recetas r
       LEFT JOIN receta_ingrediente ri
@@ -67,6 +68,7 @@ router.post('/', async (req, res) => {
       tiempo_preparacion: number | null;
       dificultad: string | null;
       imagen: string | null;
+      categoria: string | null;
       ingredientes: {
         id_ingrediente: number;
         nombre: string;
@@ -84,6 +86,7 @@ router.post('/', async (req, res) => {
           tiempo_preparacion: fila.tiempo_preparacion,
           dificultad: fila.dificultad,
           imagen: fila.imagen,
+          categoria: fila.categoria_receta,
           ingredientes: [],
         });
       }
@@ -129,6 +132,7 @@ router.post('/', async (req, res) => {
         tiempo_preparacion: receta.tiempo_preparacion,
         dificultad: receta.dificultad,
         imagen: receta.imagen,
+        categoria: receta.categoria,
         porcentajeCoincidencia,
         ingredientesDisponibles,
         ingredientesFaltantes,

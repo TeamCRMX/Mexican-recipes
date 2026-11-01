@@ -20,6 +20,7 @@ type Receta = {
   descripcion: string;
   tiempo: string;
   dificultad: string;
+  categoria: string;
   ingredientes: string[];
   utensilios: string[];
   equipos: string[];
@@ -95,6 +96,7 @@ const RECETAS: Receta[] = [
       'Platillo tradicional mexicano preparado con tortillas, salsa roja y queso.',
     tiempo: '25 minutos',
     dificultad: 'Fácil',
+    categoria: 'Desayuno',
     ingredientes: [
       'Tortillas',
       'Jitomate',
@@ -116,6 +118,7 @@ const RECETAS: Receta[] = [
       'Preparación mexicana de aguacate con limón, cebolla y cilantro.',
     tiempo: '10 minutos',
     dificultad: 'Fácil',
+    categoria: 'Entrada',
     ingredientes: ['Aguacate', 'Limón', 'Cebolla', 'Cilantro', 'Sal', 'Chile'],
     utensilios: ['Cuchillo', 'Tabla para cortar', 'Tazón', 'Tenedor'],
     equipos: [],
@@ -127,6 +130,7 @@ const RECETAS: Receta[] = [
       'Tortillas rellenas de queso, preparadas en un comal hasta que se derrita.',
     tiempo: '15 minutos',
     dificultad: 'Fácil',
+    categoria: 'Cena',
     ingredientes: ['Tortillas', 'Queso', 'Aceite'],
     utensilios: ['Espátula', 'Plato'],
     equipos: ['Estufa'],
@@ -138,6 +142,7 @@ const RECETAS: Receta[] = [
       'Arroz preparado con jitomate, ajo y cebolla, ideal como acompañamiento.',
     tiempo: '30 minutos',
     dificultad: 'Media',
+    categoria: 'Comida',
     ingredientes: ['Arroz', 'Jitomate', 'Ajo', 'Cebolla', 'Aceite', 'Sal'],
     utensilios: ['Cuchillo', 'Tabla para cortar', 'Cuchara', 'Olla'],
     equipos: ['Estufa', 'Licuadora'],
@@ -149,6 +154,7 @@ const RECETAS: Receta[] = [
       'Tacos mexicanos preparados con pollo y acompañados de verduras.',
     tiempo: '30 minutos',
     dificultad: 'Fácil',
+    categoria: 'Comida',
     ingredientes: [
       'Pollo',
       'Tortillas',
@@ -168,6 +174,7 @@ const RECETAS: Receta[] = [
       'Papas cocinadas con jitomate, cebolla y chile.',
     tiempo: '25 minutos',
     dificultad: 'Fácil',
+    categoria: 'Desayuno',
     ingredientes: ['Papa', 'Jitomate', 'Cebolla', 'Chile', 'Aceite', 'Sal'],
     utensilios: ['Cuchillo', 'Tabla para cortar', 'Sartén', 'Espátula'],
     equipos: ['Estufa'],
@@ -179,6 +186,7 @@ const RECETAS: Receta[] = [
       'Frijoles cocinados y machacados para obtener una consistencia cremosa.',
     tiempo: '20 minutos',
     dificultad: 'Fácil',
+    categoria: 'Comida',
     ingredientes: ['Frijoles', 'Cebolla', 'Aceite', 'Sal'],
     utensilios: ['Sartén', 'Cuchara', 'Machacador'],
     equipos: ['Estufa'],
@@ -190,6 +198,7 @@ const RECETAS: Receta[] = [
       'Ensalada fresca con lechuga, jitomate, aguacate y limón.',
     tiempo: '15 minutos',
     dificultad: 'Fácil',
+    categoria: 'Cena',
     ingredientes: [
       'Lechuga',
       'Jitomate',
@@ -344,6 +353,7 @@ export default function App() {
                 ? `${item.tiempo_preparacion} minutos`
                 : 'No especificado',
             dificultad: item.dificultad ?? 'No especificada',
+            categoria: (item as any).categoria ?? 'Comida',
             ingredientes: [...disponibles, ...faltantes],
             utensilios: recetaLocal?.utensilios ?? [],
             equipos: recetaLocal?.equipos ?? [],
@@ -617,6 +627,10 @@ export default function App() {
                   Dificultad: {receta.dificultad}
                 </Text>
 
+                <Text style={styles.datoReceta}>
+                  Categoría: {receta.categoria}
+                </Text>
+
                 <Text style={styles.tituloLista}>
                   ✓ Ingredientes que tienes ({receta.disponibles.length})
                 </Text>
@@ -689,6 +703,11 @@ export default function App() {
 
           <View style={styles.tarjetaDatosDetalle}>
             <View style={styles.datoDetalle}>
+              <Text style={styles.iconoDato}>🍽</Text>
+              <Text style={styles.etiquetaDato}>Categoría</Text>
+              <Text style={styles.valorDato}>
+                {recetaSeleccionada.categoria}
+              </Text>
               <Text style={styles.iconoDato}>⏱</Text>
               <Text style={styles.etiquetaDato}>Tiempo</Text>
               <Text style={styles.valorDato}>
