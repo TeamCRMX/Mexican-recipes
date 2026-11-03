@@ -48,6 +48,10 @@ router.post('/', async (req, res) => {
         r.tiempo_preparacion,
         r.dificultad,
         r.imagen,
+        r.preparacion,
+        r.utensilios,
+        r.equipos,
+        r.fuente_url,
         i.id_ingrediente,
         i.nombre AS nombre_ingrediente,
         i.categoria,
@@ -67,6 +71,10 @@ router.post('/', async (req, res) => {
       tiempo_preparacion: number | null;
       dificultad: string | null;
       imagen: string | null;
+      preparacion: string[];
+      utensilios: string[];
+      equipos: string[];
+      fuente_url: string | null;
       ingredientes: {
         id_ingrediente: number;
         nombre: string;
@@ -84,6 +92,10 @@ router.post('/', async (req, res) => {
           tiempo_preparacion: fila.tiempo_preparacion,
           dificultad: fila.dificultad,
           imagen: fila.imagen,
+          preparacion: fila.preparacion ?? [],
+          utensilios: fila.utensilios ?? [],
+          equipos: fila.equipos ?? [],
+          fuente_url: fila.fuente_url,
           ingredientes: [],
         });
       }
@@ -129,6 +141,10 @@ router.post('/', async (req, res) => {
         tiempo_preparacion: receta.tiempo_preparacion,
         dificultad: receta.dificultad,
         imagen: receta.imagen,
+        preparacion: receta.preparacion,
+        utensilios: receta.utensilios,
+        equipos: receta.equipos,
+        fuente_url: receta.fuente_url,
         porcentajeCoincidencia,
         ingredientesDisponibles,
         ingredientesFaltantes,
