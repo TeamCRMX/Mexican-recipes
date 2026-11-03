@@ -5,6 +5,8 @@ import recetasRoutes from './routes/recetas.routes.js';
 import ingredientesRoutes from './routes/ingredientes.routes.js';
 import recetaIngredientesRoutes from './routes/receta-ingredientes.routes.js';
 import recomendacionesRoutes from './routes/recomendaciones.routes.js';
+import opinionesRoutes from './routes/opiniones.routes.js';
+import contactoRoutes from './routes/contacto.routes.js';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -16,6 +18,8 @@ app.use('/api/recetas', recetasRoutes);
 app.use('/api/ingredientes', ingredientesRoutes);
 app.use('/api/recetas', recetaIngredientesRoutes);
 app.use('/api/recomendaciones', recomendacionesRoutes);
+app.use('/api/opiniones', opinionesRoutes);
+app.use('/api/contacto', contactoRoutes);
 
 app.get('/', (_req, res) => {
   res.json({
