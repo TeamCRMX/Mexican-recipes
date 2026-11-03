@@ -1,178 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   BackHandler,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
+import { INGREDIENTES_DISPONIBLES, RECETAS, type Receta } from './src/data/recetas';
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle';
-
-type Receta = {
-  id: number;
-  nombre: string;
-  descripcion: string;
-  tiempo: string;
-  dificultad: string;
-  ingredientes: string[];
-  utensilios: string[];
-  equipos: string[];
-};
 
 type ResultadoReceta = Receta & {
   porcentaje: number;
   disponibles: string[];
   faltantes: string[];
 };
-
-const INGREDIENTES_DISPONIBLES = [
-  'Aguacate',
-  'Ajo',
-  'Arroz',
-  'Calabaza',
-  'Cebolla',
-  'Chile',
-  'Cilantro',
-  'Frijoles',
-  'Jitomate',
-  'Lechuga',
-  'Limón',
-  'Maíz',
-  'Mantequilla',
-  'Papa',
-  'Queso',
-  'Sal',
-  'Tortillas',
-  'Pollo',
-  'Huevo',
-  'Crema',
-  'Aceite',
-  'Carne de res',
-  'Tomate verde',
-  'Epazote',
-];
-
-const RECETAS: Receta[] = [
-  {
-    id: 1,
-    nombre: 'Chilaquiles rojos',
-    descripcion:
-      'Platillo tradicional mexicano preparado con tortillas, salsa roja y queso.',
-    tiempo: '25 minutos',
-    dificultad: 'Fácil',
-    ingredientes: [
-      'Tortillas',
-      'Jitomate',
-      'Chile',
-      'Ajo',
-      'Cebolla',
-      'Queso',
-      'Crema',
-      'Aceite',
-      'Sal',
-    ],
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Espátula', 'Plato'],
-    equipos: ['Estufa', 'Licuadora'],
-  },
-  {
-    id: 2,
-    nombre: 'Guacamole',
-    descripcion:
-      'Preparación mexicana de aguacate con limón, cebolla y cilantro.',
-    tiempo: '10 minutos',
-    dificultad: 'Fácil',
-    ingredientes: ['Aguacate', 'Limón', 'Cebolla', 'Cilantro', 'Sal', 'Chile'],
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Tazón', 'Tenedor'],
-    equipos: [],
-  },
-  {
-    id: 3,
-    nombre: 'Quesadillas de queso',
-    descripcion:
-      'Tortillas rellenas de queso, preparadas en un comal hasta que se derrita.',
-    tiempo: '15 minutos',
-    dificultad: 'Fácil',
-    ingredientes: ['Tortillas', 'Queso', 'Aceite'],
-    utensilios: ['Espátula', 'Plato'],
-    equipos: ['Estufa'],
-  },
-  {
-    id: 4,
-    nombre: 'Arroz a la mexicana',
-    descripcion:
-      'Arroz preparado con jitomate, ajo y cebolla, ideal como acompañamiento.',
-    tiempo: '30 minutos',
-    dificultad: 'Media',
-    ingredientes: ['Arroz', 'Jitomate', 'Ajo', 'Cebolla', 'Aceite', 'Sal'],
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Cuchara', 'Olla'],
-    equipos: ['Estufa', 'Licuadora'],
-  },
-  {
-    id: 5,
-    nombre: 'Tacos de pollo',
-    descripcion:
-      'Tacos mexicanos preparados con pollo y acompañados de verduras.',
-    tiempo: '30 minutos',
-    dificultad: 'Fácil',
-    ingredientes: [
-      'Pollo',
-      'Tortillas',
-      'Cebolla',
-      'Cilantro',
-      'Limón',
-      'Sal',
-      'Aceite',
-    ],
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Espátula', 'Plato'],
-    equipos: ['Estufa'],
-  },
-  {
-    id: 6,
-    nombre: 'Papas a la mexicana',
-    descripcion:
-      'Papas cocinadas con jitomate, cebolla y chile.',
-    tiempo: '25 minutos',
-    dificultad: 'Fácil',
-    ingredientes: ['Papa', 'Jitomate', 'Cebolla', 'Chile', 'Aceite', 'Sal'],
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Sartén', 'Espátula'],
-    equipos: ['Estufa'],
-  },
-  {
-    id: 7,
-    nombre: 'Frijoles refritos',
-    descripcion:
-      'Frijoles cocinados y machacados para obtener una consistencia cremosa.',
-    tiempo: '20 minutos',
-    dificultad: 'Fácil',
-    ingredientes: ['Frijoles', 'Cebolla', 'Aceite', 'Sal'],
-    utensilios: ['Sartén', 'Cuchara', 'Machacador'],
-    equipos: ['Estufa'],
-  },
-  {
-    id: 8,
-    nombre: 'Ensalada mexicana',
-    descripcion:
-      'Ensalada fresca con lechuga, jitomate, aguacate y limón.',
-    tiempo: '15 minutos',
-    dificultad: 'Fácil',
-    ingredientes: [
-      'Lechuga',
-      'Jitomate',
-      'Aguacate',
-      'Cebolla',
-      'Limón',
-      'Sal',
-    ],
-    utensilios: ['Cuchillo', 'Tabla para cortar', 'Tazón'],
-    equipos: [],
-  },
-];
 
 export default function App() {
   const { width } = useWindowDimensions();
@@ -186,6 +36,8 @@ export default function App() {
     useState<ResultadoReceta | null>(null);
   const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
   const [cargando, setCargando] = useState(false);
+  const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
+  const [catalogoLocal, setCatalogoLocal] = useState(false);
 
   const getBackendUrl = () => {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -246,6 +98,24 @@ export default function App() {
 
   const limpiarIngredientes = () => {
     setIngredientesSeleccionados([]);
+    setBusquedaIngrediente('');
+  };
+
+  const crearResultadoLocal = (receta: Receta): ResultadoReceta => {
+    const disponibles = receta.ingredientes
+      .filter((ingrediente) => ingredientesSeleccionados.includes(ingrediente.nombre))
+      .map((ingrediente) => ingrediente.nombre);
+    const faltantes = receta.ingredientes
+      .filter((ingrediente) => !ingredientesSeleccionados.includes(ingrediente.nombre))
+      .map((ingrediente) => ingrediente.nombre);
+
+    return {
+      ...receta,
+      id: -receta.id,
+      porcentaje: Math.round((disponibles.length / receta.ingredientes.length) * 100),
+      disponibles,
+      faltantes,
+    };
   };
 
   const buscarRecetas = async () => {
@@ -257,21 +127,10 @@ export default function App() {
       return;
     }
 
-    const equivalencias: Record<string, string> = {
-      Tortillas: 'Tortillas de maíz',
-      Maíz: 'Tortillas de maíz',
-      Chile: 'Chile serrano',
-    };
-
-    const ingredientesAPI = [
-      ...new Set(
-        ingredientesSeleccionados.map(
-          (ingrediente) => equivalencias[ingrediente] ?? ingrediente,
-        ),
-      ),
-    ];
-
     setCargando(true);
+    const resultadosLocales = RECETAS.map(crearResultadoLocal);
+    const controlador = new AbortController();
+    const temporizador = setTimeout(() => controlador.abort(), 6000);
 
     try {
       const respuesta = await fetch(
@@ -281,7 +140,8 @@ export default function App() {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ ingredientes: ingredientesAPI }),
+          body: JSON.stringify({ ingredientes: ingredientesSeleccionados }),
+          signal: controlador.signal,
         },
       );
 
@@ -293,7 +153,7 @@ export default function App() {
         );
       }
 
-      const recomendaciones = (datos.recomendaciones ?? []).map(
+      const recomendacionesServidor = (datos.recomendaciones ?? []).map(
         (item: {
           id_receta: number;
           nombre: string;
@@ -301,50 +161,58 @@ export default function App() {
           tiempo_preparacion: number | null;
           dificultad: string | null;
           porcentajeCoincidencia: number;
-          ingredientesDisponibles: { nombre: string }[];
-          ingredientesFaltantes: { nombre: string }[];
-        }): ResultadoReceta => {
-          const disponibles = item.ingredientesDisponibles.map(
-            (ingrediente) => ingrediente.nombre,
-          );
-          const faltantes = item.ingredientesFaltantes.map(
-            (ingrediente) => ingrediente.nombre,
-          );
-          const recetaLocal = RECETAS.find(
-            (receta) =>
-              receta.nombre.toLocaleLowerCase('es-MX') ===
-              item.nombre.toLocaleLowerCase('es-MX'),
-          );
-
-          return {
-            id: item.id_receta,
-            nombre: item.nombre,
-            descripcion: item.descripcion ?? 'Sin descripción disponible.',
-            tiempo:
-              item.tiempo_preparacion !== null
-                ? `${item.tiempo_preparacion} minutos`
-                : 'No especificado',
-            dificultad: item.dificultad ?? 'No especificada',
-            ingredientes: [...disponibles, ...faltantes],
-            utensilios: recetaLocal?.utensilios ?? [],
-            equipos: recetaLocal?.equipos ?? [],
-            porcentaje: item.porcentajeCoincidencia,
-            disponibles,
-            faltantes,
-          };
-        },
+          preparacion?: string[];
+          utensilios?: string[];
+          equipos?: string[];
+          fuente_url?: string | null;
+        }) => ({ nombre: item.nombre, item }),
       );
 
-      setResultadosAPI(recomendaciones);
+      const recetasServidor = new Map(
+        recomendacionesServidor.map(({ nombre, item }: { nombre: string; item: Record<string, unknown> }) => [
+          nombre.toLocaleLowerCase('es-MX'), item,
+        ]),
+      );
+      const catalogoParcial = recetasServidor.size < RECETAS.length;
+      const resultados = resultadosLocales.map((local) => {
+        const servidor = recetasServidor.get(local.nombre.toLocaleLowerCase('es-MX')) as
+          | {
+              id_receta: number;
+              porcentajeCoincidencia: number;
+              preparacion?: string[];
+              utensilios?: string[];
+              equipos?: string[];
+              fuente_url?: string | null;
+            }
+          | undefined;
+
+        if (!servidor) return local;
+        return {
+          ...local,
+          id: servidor.id_receta,
+          porcentaje: catalogoParcial
+            ? local.porcentaje
+            : servidor.porcentajeCoincidencia,
+          preparacion: servidor.preparacion?.length ? servidor.preparacion : local.preparacion,
+          utensilios: servidor.utensilios?.length ? servidor.utensilios : local.utensilios,
+          equipos: servidor.equipos?.length ? servidor.equipos : local.equipos,
+          fuenteUrl: servidor.fuente_url ?? local.fuenteUrl,
+        };
+      });
+      const resultadosConCoincidencia = resultados.filter((resultado) => resultado.porcentaje > 0);
+      resultadosConCoincidencia.sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+      setCatalogoLocal(catalogoParcial);
+      setResultadosAPI(resultadosConCoincidencia);
       setPantalla('resultados');
-    } catch (error) {
-      Alert.alert(
-        'Error de conexión',
-        error instanceof Error
-          ? error.message
-          : 'No se pudo conectar con el servidor. Comprueba que el backend esté activo y que el celular use la misma red Wi-Fi.',
-      );
+    } catch {
+      const resultadosConCoincidencia = resultadosLocales
+        .filter((resultado) => resultado.porcentaje > 0)
+        .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+      setResultadosAPI(resultadosConCoincidencia);
+      setCatalogoLocal(true);
+      setPantalla('resultados');
     } finally {
+      clearTimeout(temporizador);
       setCargando(false);
     }
   };
@@ -381,6 +249,12 @@ export default function App() {
     </View>
   );
 
+  const ingredientesFiltrados = INGREDIENTES_DISPONIBLES.filter((ingrediente) =>
+    `${ingrediente.nombre} ${ingrediente.categoria}`
+      .toLocaleLowerCase('es-MX')
+      .includes(busquedaIngrediente.trim().toLocaleLowerCase('es-MX')),
+  );
+
   const mostrarInicio = () => (
     <ScrollView
       contentContainerStyle={styles.contenidoInicio}
@@ -391,6 +265,18 @@ export default function App() {
       </View>
 
       <Text style={styles.tituloInicio}>Recetas mexicanas</Text>
+
+      <View style={styles.resumenInicio}>
+        <View style={styles.datoInicio}>
+          <Text style={styles.numeroInicio}>{RECETAS.length}</Text>
+          <Text style={styles.etiquetaInicio}>recetas</Text>
+        </View>
+        <View style={styles.separadorInicio} />
+        <View style={styles.datoInicio}>
+          <Text style={styles.numeroInicio}>{INGREDIENTES_DISPONIBLES.length}</Text>
+          <Text style={styles.etiquetaInicio}>ingredientes</Text>
+        </View>
+      </View>
 
       <Text style={styles.descripcionInicio}>
         Descubre qué puedes cocinar con los ingredientes que tienes en casa.
@@ -458,19 +344,37 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
+      <TextInput
+        value={busquedaIngrediente}
+        onChangeText={setBusquedaIngrediente}
+        placeholder="Busca un ingrediente, por ejemplo: chile"
+        placeholderTextColor="#8B958B"
+        style={styles.campoBusqueda}
+        accessibilityLabel="Buscar ingredientes"
+        returnKeyType="search"
+        clearButtonMode="while-editing"
+      />
+      <Text style={styles.textoAyudaIngredientes}>
+        {ingredientesFiltrados.length} ingredientes disponibles · {RECETAS.length} recetas mexicanas
+      </Text>
+
       <ScrollView
         style={styles.listaDesplazable}
         contentContainerStyle={styles.listaIngredientes}
         showsVerticalScrollIndicator={false}
       >
-        {INGREDIENTES_DISPONIBLES.map((ingrediente) => {
+        {ingredientesFiltrados.length === 0 ? (
+          <Text style={styles.textoSinIngredientes}>
+            No hay ingredientes con ese nombre. Prueba otra búsqueda.
+          </Text>
+        ) : ingredientesFiltrados.map((ingrediente) => {
           const seleccionado =
-            ingredientesSeleccionados.includes(ingrediente);
+            ingredientesSeleccionados.includes(ingrediente.nombre);
 
           return (
             <TouchableOpacity
-              key={ingrediente}
-              onPress={() => alternarIngrediente(ingrediente)}
+              key={ingrediente.nombre}
+              onPress={() => alternarIngrediente(ingrediente.nombre)}
               style={[
                 styles.botonIngrediente,
                 pantallaAncha && styles.botonIngredienteAncho,
@@ -487,8 +391,9 @@ export default function App() {
                 ]}
               >
                 {seleccionado ? '✓  ' : '+  '}
-                {ingrediente}
+                {ingrediente.nombre}
               </Text>
+              <Text style={styles.categoriaIngrediente}>{ingrediente.categoria}</Text>
             </TouchableOpacity>
           );
         })}
@@ -496,17 +401,26 @@ export default function App() {
 
       <View style={styles.piePantalla}>
         <TouchableOpacity
-          style={styles.botonPrincipal}
+          style={[
+            styles.botonPrincipal,
+            (cargando || ingredientesSeleccionados.length === 0) &&
+              styles.botonDeshabilitado,
+          ]}
           onPress={buscarRecetas}
-          disabled={cargando}
+          disabled={cargando || ingredientesSeleccionados.length === 0}
           activeOpacity={0.75}
           accessibilityRole="button"
         >
-          <Text style={styles.textoBotonPrincipal}>
-            {cargando
-              ? 'Buscando recetas...'
-              : `Buscar recetas (${ingredientesSeleccionados.length})`}
-          </Text>
+          {cargando ? (
+            <View style={styles.filaCargando}>
+              <ActivityIndicator color="#FFFFFF" />
+              <Text style={styles.textoBotonPrincipal}>Buscando recetas...</Text>
+            </View>
+          ) : (
+            <Text style={styles.textoBotonPrincipal}>
+              Buscar recetas ({ingredientesSeleccionados.length})
+            </Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -524,6 +438,14 @@ export default function App() {
         {encabezado(
           'Recetas recomendadas',
           'Estas recetas se ordenan según los ingredientes que tienes.',
+        )}
+
+        {catalogoLocal && (
+          <View style={styles.avisoCatalogoLocal}>
+            <Text style={styles.textoAvisoCatalogo}>
+              Catálogo listo en tu dispositivo. Algunas recetas se muestran desde la app mientras se completa la sincronización con el servidor.
+            </Text>
+          </View>
         )}
 
         <Text style={styles.textoCantidad}>
@@ -591,7 +513,7 @@ export default function App() {
                 </View>
 
                 <Text style={styles.datoReceta}>
-                  ⏱ Tiempo: {receta.tiempo}
+                  ⏱ Tiempo: {receta.tiempoMin} min
                 </Text>
 
                 <Text style={styles.datoReceta}>
@@ -673,7 +595,7 @@ export default function App() {
               <Text style={styles.iconoDato}>⏱</Text>
               <Text style={styles.etiquetaDato}>Tiempo</Text>
               <Text style={styles.valorDato}>
-                {recetaSeleccionada.tiempo}
+                {recetaSeleccionada.tiempoMin} min
               </Text>
             </View>
 
@@ -695,13 +617,19 @@ export default function App() {
           </View>
 
           <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>Ingredientes disponibles</Text>
+            <Text style={styles.tituloSeccion}>Ingredientes</Text>
 
-            {recetaSeleccionada.disponibles.map((ingrediente) => (
-              <Text key={ingrediente} style={styles.elementoLista}>
-                ✓ {ingrediente}
-              </Text>
-            ))}
+            {recetaSeleccionada.ingredientes.map((ingrediente) => {
+              const loTienes = recetaSeleccionada.disponibles.includes(ingrediente.nombre);
+              return (
+                <View key={ingrediente.nombre} style={styles.filaIngredienteDetalle}>
+                  <Text style={[styles.elementoLista, !loTienes && styles.elementoFaltante]}>
+                    {loTienes ? '✓' : '＋'} {ingrediente.nombre}
+                  </Text>
+                  <Text style={styles.cantidadIngrediente}>{ingrediente.cantidad}</Text>
+                </View>
+              );
+            })}
           </View>
 
           <View style={styles.seccionDetalle}>
@@ -721,6 +649,16 @@ export default function App() {
           </View>
 
           <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Preparación</Text>
+            {recetaSeleccionada.preparacion.map((paso, indice) => (
+              <View key={`${recetaSeleccionada.id}-paso-${indice}`} style={styles.filaPaso}>
+                <Text style={styles.numeroPaso}>{indice + 1}</Text>
+                <Text style={styles.textoPaso}>{paso}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Utensilios necesarios</Text>
 
             {recetaSeleccionada.utensilios.map((utensilio) => (
@@ -729,6 +667,19 @@ export default function App() {
               </Text>
             ))}
           </View>
+
+          {recetaSeleccionada.fuenteUrl && (
+            <TouchableOpacity
+              onPress={() => Linking.openURL(recetaSeleccionada.fuenteUrl!).catch(() =>
+                Alert.alert('No se pudo abrir el enlace', 'Revisa tu conexión e inténtalo nuevamente.'),
+              )}
+              style={styles.botonFuente}
+              activeOpacity={0.75}
+              accessibilityRole="link"
+            >
+              <Text style={styles.textoBotonFuente}>Consultar la fuente de la receta ↗</Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>
@@ -827,6 +778,41 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     marginBottom: 26,
     maxWidth: 500,
+  },
+
+  resumenInicio: {
+    width: '100%',
+    maxWidth: 360,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EAF2E6',
+    borderRadius: 16,
+    paddingVertical: 15,
+    marginBottom: 18,
+  },
+
+  datoInicio: {
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  numeroInicio: {
+    color: '#246B45',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+
+  etiquetaInicio: {
+    color: '#58645A',
+    fontSize: 12,
+    marginTop: 2,
+  },
+
+  separadorInicio: {
+    height: 34,
+    width: 1,
+    backgroundColor: '#C8D9C5',
   },
 
   tarjetaInformativa: {
@@ -960,6 +946,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  campoBusqueda: {
+    minHeight: 54,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8E1D6',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#26372D',
+    marginBottom: 6,
+  },
+
+  textoAyudaIngredientes: {
+    fontSize: 12,
+    color: '#667268',
+    marginBottom: 12,
+  },
+
+  textoSinIngredientes: {
+    width: '100%',
+    paddingVertical: 24,
+    color: '#58645A',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
   listaIngredientes: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -969,7 +981,7 @@ const styles = StyleSheet.create({
 
   botonIngrediente: {
     width: '48%',
-    minHeight: 50,
+    minHeight: 66,
     justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 12,
@@ -1001,6 +1013,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
+  categoriaIngrediente: {
+    marginTop: 3,
+    marginLeft: 24,
+    color: '#7A857C',
+    fontSize: 11,
+  },
+
+  filaCargando: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+
   piePantalla: {
     paddingTop: 8,
     paddingBottom: 8,
@@ -1011,6 +1037,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#58645A',
     marginBottom: 12,
+  },
+
+  avisoCatalogoLocal: {
+    backgroundColor: '#FFF3D6',
+    borderColor: '#E9D79E',
+    borderWidth: 1,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+
+  textoAvisoCatalogo: {
+    color: '#6E5A27',
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   listaResultados: {
@@ -1226,6 +1268,67 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1,
     borderColor: '#E0E8DC',
+  },
+
+  filaIngredienteDetalle: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 3,
+    gap: 12,
+  },
+
+  cantidadIngrediente: {
+    maxWidth: '42%',
+    color: '#69746B',
+    fontSize: 13,
+    lineHeight: 24,
+    textAlign: 'right',
+  },
+
+  filaPaso: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 14,
+  },
+
+  numeroPaso: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: '#E4F2DF',
+    color: '#246B45',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+  },
+
+  textoPaso: {
+    flex: 1,
+    color: '#46534A',
+    fontSize: 14,
+    lineHeight: 22,
+  },
+
+  botonFuente: {
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderColor: '#267348',
+    borderWidth: 1,
+    marginBottom: 14,
+    paddingHorizontal: 14,
+  },
+
+  textoBotonFuente: {
+    color: '#267348',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 
   tituloSeccion: {
