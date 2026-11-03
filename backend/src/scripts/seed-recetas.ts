@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { pool } from '../config/db.js';
 
 type Ingrediente = { nombre: string; cantidad: string; categoria: string };
@@ -18,12 +17,10 @@ type Receta = {
   fuenteUrl?: string;
 };
 
-const rutaCatalogo = fileURLToPath(
-  new URL('../../../mobile/src/data/recetas.ts', import.meta.url),
-);
+const rutaCatalogo = new URL('../../../mobile/src/data/recetas.ts', import.meta.url);
 
 async function sembrarRecetas() {
-  const { RECETAS } = (await import(rutaCatalogo)) as {
+  const { RECETAS } = (await import(rutaCatalogo.href)) as {
     RECETAS: Receta[];
   };
   const cliente = await pool.connect();
