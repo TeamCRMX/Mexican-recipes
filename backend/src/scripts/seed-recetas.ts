@@ -5,8 +5,12 @@ type Ingrediente = { nombre: string; cantidad: string; categoria: string };
 type Receta = {
   nombre: string;
   descripcion: string;
+  categoria: string;
   tiempoMin: number;
+  porciones: number;
   dificultad: string;
+  emoji: string;
+  consejo?: string;
   ingredientes: Ingrediente[];
   utensilios: string[];
   equipos: string[];
@@ -31,9 +35,13 @@ async function sembrarRecetas() {
         id_receta SERIAL PRIMARY KEY,
         nombre VARCHAR(160) NOT NULL,
         descripcion TEXT,
+        categoria VARCHAR(40) NOT NULL DEFAULT 'Comida',
         tiempo_preparacion INTEGER,
+        porciones INTEGER NOT NULL DEFAULT 4,
         dificultad VARCHAR(40),
-        imagen TEXT
+        imagen TEXT,
+        emoji VARCHAR(16),
+        consejo TEXT
       );
       CREATE TABLE IF NOT EXISTS ingredientes (
         id_ingrediente SERIAL PRIMARY KEY,
@@ -50,22 +58,49 @@ async function sembrarRecetas() {
       ALTER TABLE recetas ADD COLUMN IF NOT EXISTS utensilios TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
       ALTER TABLE recetas ADD COLUMN IF NOT EXISTS equipos TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
       ALTER TABLE recetas ADD COLUMN IF NOT EXISTS fuente_url TEXT;
+      ALTER TABLE recetas ADD COLUMN IF NOT EXISTS categoria VARCHAR(40) NOT NULL DEFAULT 'Comida';
+      ALTER TABLE recetas ADD COLUMN IF NOT EXISTS porciones INTEGER NOT NULL DEFAULT 4;
+      ALTER TABLE recetas ADD COLUMN IF NOT EXISTS emoji VARCHAR(16);
+      ALTER TABLE recetas ADD COLUMN IF NOT EXISTS consejo TEXT;
       ALTER TABLE ingredientes ADD COLUMN IF NOT EXISTS categoria VARCHAR(80);
       ALTER TABLE receta_ingrediente ADD COLUMN IF NOT EXISTS cantidad TEXT;
       CREATE UNIQUE INDEX IF NOT EXISTS ux_recetas_nombre ON recetas (nombre);
       CREATE UNIQUE INDEX IF NOT EXISTS ux_ingredientes_nombre ON ingredientes (nombre);
       CREATE UNIQUE INDEX IF NOT EXISTS ux_receta_ingrediente_pair ON receta_ingrediente (id_receta, id_ingrediente);
+      CREATE TABLE IF NOT EXISTS opiniones (
+        id_opinion SERIAL PRIMARY KEY,
+        id_receta INTEGER REFERENCES recetas(id_receta) ON DELETE SET NULL,
+        nombre_receta VARCHAR(160),
+        nombre_usuario VARCHAR(80) NOT NULL DEFAULT 'Anónimo',
+        calificacion SMALLINT NOT NULL CHECK (calificacion BETWEEN 1 AND 5),
+        comentario VARCHAR(600) NOT NULL,
+        creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS ix_opiniones_receta_fecha ON opiniones (id_receta, creado_en DESC);
+      CREATE TABLE IF NOT EXISTS mensajes_contacto (
+        id_mensaje SERIAL PRIMARY KEY,
+        nombre VARCHAR(80) NOT NULL,
+        correo VARCHAR(254),
+        mensaje VARCHAR(1200) NOT NULL,
+        estado VARCHAR(20) NOT NULL DEFAULT 'nuevo',
+        creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS ix_contacto_estado_fecha ON mensajes_contacto (estado, creado_en DESC);
     `);
 
     for (const receta of RECETAS) {
       const guardada = await cliente.query<{ id_receta: number }>(
         `INSERT INTO recetas
-          (nombre, descripcion, tiempo_preparacion, dificultad, preparacion, utensilios, equipos, fuente_url)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          (nombre, descripcion, categoria, tiempo_preparacion, porciones, dificultad, emoji, consejo, preparacion, utensilios, equipos, fuente_url)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (nombre) DO UPDATE SET
           descripcion = EXCLUDED.descripcion,
+          categoria = EXCLUDED.categoria,
           tiempo_preparacion = EXCLUDED.tiempo_preparacion,
+          porciones = EXCLUDED.porciones,
           dificultad = EXCLUDED.dificultad,
+          emoji = EXCLUDED.emoji,
+          consejo = EXCLUDED.consejo,
           preparacion = EXCLUDED.preparacion,
           utensilios = EXCLUDED.utensilios,
           equipos = EXCLUDED.equipos,
@@ -74,8 +109,12 @@ async function sembrarRecetas() {
         [
           receta.nombre,
           receta.descripcion,
+          receta.categoria,
           receta.tiempoMin,
+          receta.porciones,
           receta.dificultad,
+          receta.emoji,
+          receta.consejo ?? null,
           receta.preparacion,
           receta.utensilios,
           receta.equipos,

@@ -6,8 +6,9 @@ const router = Router();
 router.get('/', async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id_receta, nombre, descripcion, tiempo_preparacion,
-              dificultad, imagen, preparacion, utensilios, equipos, fuente_url
+      `SELECT id_receta, nombre, descripcion, categoria, tiempo_preparacion,
+              porciones, dificultad, imagen, emoji, consejo, preparacion,
+              utensilios, equipos, fuente_url
        FROM recetas
        ORDER BY nombre ASC`
     );
@@ -34,9 +35,13 @@ router.get('/:id', async (req, res) => {
          r.id_receta,
          r.nombre,
          r.descripcion,
+         r.categoria,
          r.tiempo_preparacion,
+         r.porciones,
          r.dificultad,
          r.imagen,
+         r.emoji,
+         r.consejo,
          r.preparacion,
          r.utensilios,
          r.equipos,
