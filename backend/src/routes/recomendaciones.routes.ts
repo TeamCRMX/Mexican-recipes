@@ -45,13 +45,20 @@ router.post('/', async (req, res) => {
         r.id_receta,
         r.nombre,
         r.descripcion,
+        r.categoria AS categoria_receta,
         r.tiempo_preparacion,
+        r.porciones,
         r.dificultad,
         r.imagen,
-        r.categoria,
+        r.emoji,
+        r.consejo,
+        r.preparacion,
+        r.utensilios,
+        r.equipos,
+        r.fuente_url,
         i.id_ingrediente,
         i.nombre AS nombre_ingrediente,
-        r.categoria AS categoria_receta,
+        i.categoria AS categoria_ingrediente,
         ri.cantidad
       FROM recetas r
       LEFT JOIN receta_ingrediente ri
@@ -65,10 +72,17 @@ router.post('/', async (req, res) => {
       id_receta: number;
       nombre: string;
       descripcion: string | null;
+      categoria: string | null;
       tiempo_preparacion: number | null;
+      porciones: number | null;
       dificultad: string | null;
       imagen: string | null;
-      categoria: string | null;
+      emoji: string | null;
+      consejo: string | null;
+      preparacion: string[];
+      utensilios: string[];
+      equipos: string[];
+      fuente_url: string | null;
       ingredientes: {
         id_ingrediente: number;
         nombre: string;
@@ -83,10 +97,17 @@ router.post('/', async (req, res) => {
           id_receta: fila.id_receta,
           nombre: fila.nombre,
           descripcion: fila.descripcion,
+          categoria: fila.categoria_receta,
           tiempo_preparacion: fila.tiempo_preparacion,
+          porciones: fila.porciones,
           dificultad: fila.dificultad,
           imagen: fila.imagen,
-          categoria: fila.categoria_receta,
+          emoji: fila.emoji,
+          consejo: fila.consejo,
+          preparacion: fila.preparacion ?? [],
+          utensilios: fila.utensilios ?? [],
+          equipos: fila.equipos ?? [],
+          fuente_url: fila.fuente_url,
           ingredientes: [],
         });
       }
@@ -95,7 +116,7 @@ router.post('/', async (req, res) => {
         recetasMap.get(fila.id_receta)!.ingredientes.push({
           id_ingrediente: fila.id_ingrediente,
           nombre: fila.nombre_ingrediente,
-          categoria: fila.categoria,
+          categoria: fila.categoria_ingrediente,
           cantidad: fila.cantidad,
         });
       }
@@ -129,10 +150,17 @@ router.post('/', async (req, res) => {
         id_receta: receta.id_receta,
         nombre: receta.nombre,
         descripcion: receta.descripcion,
+        categoria: receta.categoria,
         tiempo_preparacion: receta.tiempo_preparacion,
+        porciones: receta.porciones,
         dificultad: receta.dificultad,
         imagen: receta.imagen,
-        categoria: receta.categoria,
+        emoji: receta.emoji,
+        consejo: receta.consejo,
+        preparacion: receta.preparacion,
+        utensilios: receta.utensilios,
+        equipos: receta.equipos,
+        fuente_url: receta.fuente_url,
         porcentajeCoincidencia,
         ingredientesDisponibles,
         ingredientesFaltantes,
