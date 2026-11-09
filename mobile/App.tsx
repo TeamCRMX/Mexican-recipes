@@ -1247,6 +1247,27 @@ export default function App() {
           </View>
 
           <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Revisa antes de comenzar</Text>
+            <Text style={styles.textoSecundario}>Ten listos estos utensilios y equipos antes de preparar la receta.</Text>
+            <Text style={styles.subtituloListaRecursos}>Equipos y dispositivos</Text>
+            {recetaSeleccionada.equipos.length > 0 ? (
+              recetaSeleccionada.equipos.map((equipo) => (
+                <Text key={equipo} style={styles.elementoLista}>• {equipo}</Text>
+              ))
+            ) : (
+              <Text style={styles.textoSecundario}>No requiere equipos eléctricos específicos.</Text>
+            )}
+            <Text style={styles.subtituloListaRecursos}>Utensilios</Text>
+            {recetaSeleccionada.utensilios.length > 0 ? (
+              recetaSeleccionada.utensilios.map((utensilio) => (
+                <Text key={utensilio} style={styles.elementoLista}>• {utensilio}</Text>
+              ))
+            ) : (
+              <Text style={styles.textoSecundario}>No hay utensilios adicionales registrados.</Text>
+            )}
+          </View>
+
+          <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Ingredientes</Text>
             <Text style={styles.textoSecundario}>Cantidades para {recetaSeleccionada.porciones} porciones. Toca un ingrediente cuando ya lo tengas listo.</Text>
 
@@ -1329,16 +1350,6 @@ export default function App() {
             </View>
           ) : null}
 
-          <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>Utensilios necesarios</Text>
-
-            {recetaSeleccionada.utensilios.map((utensilio) => (
-              <Text key={utensilio} style={styles.elementoLista}>
-                • {utensilio}
-              </Text>
-            ))}
-          </View>
-
           {recetaSeleccionada.fuenteUrl && (
             <TouchableOpacity
               onPress={() => Linking.openURL(recetaSeleccionada.fuenteUrl!).catch(() =>
@@ -1351,29 +1362,6 @@ export default function App() {
               <Text style={styles.textoBotonFuente}>Consultar la fuente de la receta ↗</Text>
             </TouchableOpacity>
           )}
-
-          <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>
-              Equipos y dispositivos necesarios
-            </Text>
-
-            {recetaSeleccionada.equipos.length > 0 ? (
-              recetaSeleccionada.equipos.map((equipo) => (
-                <Text key={equipo} style={styles.elementoLista}>
-                  • {equipo}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.textoSecundario}>
-                Esta receta no requiere equipos eléctricos específicos.
-              </Text>
-            )}
-
-            <Text style={styles.notaDetalle}>
-              La aplicación indica los equipos necesarios para preparar la
-              receta, pero no comprueba si están disponibles en tu casa.
-            </Text>
-          </View>
 
           <TouchableOpacity
             style={styles.botonPrincipal}
@@ -2097,6 +2085,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: '#58645A',
+  },
+
+  subtituloListaRecursos: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#58645A',
+    marginTop: 10,
+    marginBottom: 3,
   },
 
   notaDetalle: {
