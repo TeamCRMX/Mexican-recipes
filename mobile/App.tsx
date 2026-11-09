@@ -267,7 +267,8 @@ export default function App() {
           nombre.toLocaleLowerCase('es-MX'), item,
         ]),
       );
-      const catalogoParcial = recetasServidor.size < RECETAS.length;
+      const catalogoTotal = Number(datos.catalogoTotal ?? recomendacionesServidor.length);
+      const catalogoParcial = catalogoTotal < RECETAS.length;
       const resultados = resultadosLocales.map((local) => {
         const servidor = recetasServidor.get(local.nombre.toLocaleLowerCase('es-MX')) as
           | {
@@ -301,14 +302,14 @@ export default function App() {
           consejo: servidor.consejo ?? local.consejo,
         };
       });
-      const resultadosConCoincidencia = resultados.filter((resultado) => resultado.porcentaje > 0);
+      const resultadosConCoincidencia = resultados.filter((resultado) => resultado.porcentaje >= 50);
       resultadosConCoincidencia.sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
       setCatalogoLocal(catalogoParcial);
       setResultadosAPI(resultadosConCoincidencia);
       setPantalla('resultados');
     } catch {
       const resultadosConCoincidencia = resultadosLocales
-        .filter((resultado) => resultado.porcentaje > 0)
+        .filter((resultado) => resultado.porcentaje >= 50)
         .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
       setResultadosAPI(resultadosConCoincidencia);
       setCatalogoLocal(true);
