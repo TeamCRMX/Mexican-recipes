@@ -390,6 +390,12 @@ export default function App() {
       .includes(busquedaIngrediente.trim().toLocaleLowerCase('es-MX')),
   );
 
+  const vistaPreviaRecetas = ingredientesSeleccionados.length === 0
+    ? []
+    : RECETAS.map(crearResultadoLocal)
+      .filter((resultado) => resultado.porcentaje >= 50)
+      .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+
   const normalizarTexto = (valor: string) => valor
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -802,6 +808,41 @@ export default function App() {
         contentContainerStyle={styles.listaIngredientes}
         showsVerticalScrollIndicator={false}
       >
+        {ingredientesSeleccionados.length > 0 && (
+          <View style={styles.vistaPreviaCoincidencias}>
+            <Text style={styles.tituloVistaPrevia}>Vista previa de coincidencias</Text>
+            <Text style={styles.textoVistaPrevia}>
+              {vistaPreviaRecetas.length
+                ? `${vistaPreviaRecetas.length} ${vistaPreviaRecetas.length === 1 ? 'receta supera' : 'recetas superan'} el mínimo de 50%. La lista cambia al marcar o quitar ingredientes.`
+                : 'Aún no hay recetas con 50% de coincidencia. Selecciona otro ingrediente para ver opciones.'}
+            </Text>
+            {vistaPreviaRecetas.slice(0, 4).map((receta) => (
+              <TouchableOpacity
+                key={receta.id}
+                style={styles.tarjetaVistaPrevia}
+                onPress={() => abrirDetalle(receta)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`${receta.nombre}, ${receta.porcentaje}% de coincidencia`}
+              >
+                <View style={styles.filaVistaPrevia}>
+                  <Text style={styles.nombreVistaPrevia}>{receta.emoji} {receta.nombre}</Text>
+                  <Text style={styles.porcentajeVistaPrevia}>{receta.porcentaje}%</Text>
+                </View>
+                <Text style={styles.faltantesVistaPrevia}>
+                  {receta.faltantes.length
+                    ? `Te falta${receta.faltantes.length === 1 ? '' : 'n'}: ${receta.faltantes.slice(0, 4).join(', ')}${receta.faltantes.length > 4 ? ` y ${receta.faltantes.length - 4} más` : ''}`
+                    : 'Tienes todos los ingredientes de esta receta.'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {vistaPreviaRecetas.length > 4 && (
+              <Text style={styles.textoVistaPrevia}>
+                Y {vistaPreviaRecetas.length - 4} recetas más alcanzan el mínimo.
+              </Text>
+            )}
+          </View>
+        )}
         {ingredientesFiltrados.length === 0 ? (
           <Text style={styles.textoSinIngredientes}>
             No hay ingredientes con ese nombre. Prueba otra búsqueda.
@@ -1560,6 +1601,65 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#35473A',
     flexShrink: 1,
+  },
+
+  vistaPreviaCoincidencias: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8E6D2',
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 12,
+  },
+
+  tituloVistaPrevia: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#246B45',
+    marginBottom: 5,
+  },
+
+  textoVistaPrevia: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#58645A',
+    marginBottom: 7,
+  },
+
+  tarjetaVistaPrevia: {
+    backgroundColor: '#F4F8F1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 6,
+  },
+
+  filaVistaPrevia: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  nombreVistaPrevia: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#35473A',
+  },
+
+  porcentajeVistaPrevia: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#267348',
+  },
+
+  faltantesVistaPrevia: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#8B4B35',
+    marginTop: 4,
   },
 
   botonLimpiar: {
