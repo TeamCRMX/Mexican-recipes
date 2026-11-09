@@ -21,6 +21,7 @@ import {
   type CategoriaReceta,
   type Receta,
 } from './src/data/recetas';
+import { obtenerBebidasParaAcompanamiento } from './src/data/bebidas';
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
@@ -1268,6 +1269,20 @@ export default function App() {
           </View>
 
           <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Bebidas para acompañar</Text>
+            <Text style={styles.textoSecundario}>Opciones de restaurante que combinan con esta receta.</Text>
+            {obtenerBebidasParaAcompanamiento(recetaSeleccionada.categoria).map((bebida) => (
+              <View key={bebida.id} style={styles.filaBebidaAcompanamiento}>
+                <Text style={styles.emojiBebidaAcompanamiento}>{bebida.emoji}</Text>
+                <View style={styles.detalleBebidaAcompanamiento}>
+                  <Text style={styles.nombreBebidaAcompanamiento}>{bebida.nombre}</Text>
+                  <Text style={styles.textoBebidaAcompanamiento}>{bebida.descripcion}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Ingredientes</Text>
             <Text style={styles.textoSecundario}>Cantidades para {recetaSeleccionada.porciones} porciones. Toca un ingrediente cuando ya lo tengas listo.</Text>
 
@@ -2093,6 +2108,37 @@ const styles = StyleSheet.create({
     color: '#58645A',
     marginTop: 10,
     marginBottom: 3,
+  },
+
+  filaBebidaAcompanamiento: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#EDF1E9',
+    paddingTop: 10,
+    marginTop: 9,
+  },
+
+  emojiBebidaAcompanamiento: {
+    fontSize: 23,
+  },
+
+  detalleBebidaAcompanamiento: {
+    flex: 1,
+  },
+
+  nombreBebidaAcompanamiento: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#35473A',
+    marginBottom: 2,
+  },
+
+  textoBebidaAcompanamiento: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#58645A',
   },
 
   notaDetalle: {
