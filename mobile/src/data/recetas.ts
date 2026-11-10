@@ -1,3 +1,5 @@
+import { RECETAS_EXTRA } from './recetas-extra';
+
 export type IngredienteReceta = {
   nombre: string;
   cantidad: string;
@@ -112,7 +114,7 @@ const receta = (
   }),
 });
 
-export const RECETAS: Receta[] = [
+const RECETAS_BASE: Receta[] = [
   receta({
     id: 1,
     nombre: 'Chilaquiles rojos',
@@ -1017,6 +1019,8 @@ export const RECETAS: Receta[] = [
     fuenteUrl: 'https://laroussecocina.mx/receta/ensalada-clasica-de-nopales/',
   }),
 ];
+
+export const RECETAS: Receta[] = [...RECETAS_BASE, ...RECETAS_EXTRA];
 
 export const INGREDIENTES_DISPONIBLES = Array.from(
   new Map(RECETAS.flatMap((item) => item.ingredientes).map((item) => [item.nombre, { nombre: item.nombre,
