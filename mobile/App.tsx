@@ -42,6 +42,10 @@ type Opinion = {
   comentario: string;
   creado_en: string;
 };
+type EntradaHistorialNavegacion = {
+  pantalla: Pantalla;
+  receta: ResultadoReceta | null;
+};
 
 const ICONO_CATEGORIA: Record<CategoriaReceta, string> = {
   Desayuno: '☀️',
@@ -92,7 +96,7 @@ export default function App() {
   >([]);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
-  const [historialRecetas, setHistorialRecetas] = useState<ResultadoReceta[]>([]);
+  const [historialRecetas, setHistorialRecetas] = useState<EntradaHistorialNavegacion[]>([]);
   const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
   const [cargando, setCargando] = useState(false);
   const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
@@ -106,6 +110,8 @@ export default function App() {
   const [recetaDestacada, setRecetaDestacada] = useState<Receta>(RECETAS[0]);
   const [pasosCompletados, setPasosCompletados] = useState<number[]>([]);
   const [recetaOpinion, setRecetaOpinion] = useState<Receta | null>(null);
+  const [recetaOpinionNombre, setRecetaOpinionNombre] = useState<string | null>(null);
+  const [seccionOpiniones, setSeccionOpiniones] = useState<'generales' | 'recetas'>('generales');
   const [opiniones, setOpiniones] = useState<Opinion[]>([]);
   const [promedioOpiniones, setPromedioOpiniones] = useState(0);
   const [cargandoOpiniones, setCargandoOpiniones] = useState(false);
@@ -125,11 +131,11 @@ export default function App() {
     outputRange: ['0deg', '720deg'],
   });
 
-  const cargarOpiniones = useCallback(async (receta: Receta | null = recetaOpinion): Promise<boolean> => {
+  const cargarOpiniones = useCallback(async (nombreReceta: string | null = recetaOpinionNombre): Promise<boolean> => {
     setCargandoOpiniones(true);
     try {
-      const query = receta
-        ? `?receta=${encodeURIComponent(receta.nombre)}`
+      const query = nombreReceta
+        ? `?receta=${encodeURIComponent(nombreReceta)}`
         : '';
       const respuesta = await fetchConTiempo(`${getBackendUrl()}/api/opiniones${query}`);
       const datos = await respuesta.json();
@@ -143,19 +149,32 @@ export default function App() {
     } finally {
       setCargandoOpiniones(false);
     }
-  }, [recetaOpinion]);
+  }, [recetaOpinionNombre]);
 
   const volver = useCallback(() => {
     if (pantalla === 'detalle') {
       if (historialRecetas.length > 0) {
         const anteriores = [...historialRecetas];
-        const recetaAnterior = anteriores.pop()!;
+        const entradaAnterior = anteriores.pop()!;
         setHistorialRecetas(anteriores);
-        setRecetaSeleccionada(recetaAnterior);
+        setRecetaSeleccionada(entradaAnterior.receta);
+        setPantalla(entradaAnterior.pantalla);
         setPasosCompletados([]);
         return true;
       }
-      setPantalla(pantallaAnterior);
+      setRecetaSeleccionada(null);
+      setPantalla(pantallaAnterior === 'inicio' ? 'catalogo' : pantallaAnterior);
+      return true;
+    }
+
+    if (pantalla === 'opiniones' && pantallaAnterior === 'opiniones') {
+      setRecetaOpinion(null);
+      setRecetaOpinionNombre(null);
+      setSeccionOpiniones('recetas');
+      setOpiniones([]);
+      setPromedioOpiniones(0);
+      setEstadoOpinion('');
+      void cargarOpiniones(null);
       return true;
     }
 
@@ -180,7 +199,7 @@ export default function App() {
     }
 
     return false;
-  }, [historialRecetas, pantalla, pantallaAnterior]);
+  }, [cargarOpiniones, historialRecetas, pantalla, pantallaAnterior]);
 
   useEffect(() => {
     const suscripcion = BackHandler.addEventListener(
@@ -340,27 +359,54 @@ export default function App() {
   };
 
   const abrirDetalle = (receta: ResultadoReceta) => {
-    if (pantalla === 'detalle' && recetaSeleccionada) {
-      setHistorialRecetas((actuales) => [...actuales, recetaSeleccionada]);
-    } else {
-      setHistorialRecetas([]);
-      setPantallaAnterior(pantalla);
-    }
+    const pantallaOrigen = pantalla === 'inicio' ? 'catalogo' : pantalla;
+    setHistorialRecetas((actuales) => [...actuales, {
+      pantalla: pantalla === 'detalle' ? 'detalle' : pantallaOrigen,
+      receta: pantalla === 'detalle' ? recetaSeleccionada : null,
+    }]);
+    if (pantalla !== 'detalle') setPantallaAnterior(pantallaOrigen);
     setRecetaSeleccionada(receta);
     setPasosCompletados([]);
     setPantalla('detalle');
   };
 
-  const abrirOpiniones = (receta: Receta | null = null) => {
+  const abrirOpiniones = (
+    receta: Receta | null = null,
+    nombreReceta: string | null = receta?.nombre ?? null,
+  ) => {
     setPantallaAnterior(pantalla);
     setRecetaOpinion(receta);
+    setRecetaOpinionNombre(nombreReceta);
+    setSeccionOpiniones(receta || nombreReceta ? 'recetas' : 'generales');
     setOpiniones([]);
     setPromedioOpiniones(0);
     setTextoOpinion('');
     setCalificacionOpinion(5);
     setEstadoOpinion('');
     setPantalla('opiniones');
-    void cargarOpiniones(receta);
+    void cargarOpiniones(nombreReceta);
+  };
+
+  const abrirListaOpiniones = (seccion: 'generales' | 'recetas') => {
+    setPantallaAnterior(pantalla);
+    setRecetaOpinion(null);
+    setRecetaOpinionNombre(null);
+    setSeccionOpiniones(seccion);
+    setOpiniones([]);
+    setPromedioOpiniones(0);
+    setEstadoOpinion('');
+    setPantalla('opiniones');
+    void cargarOpiniones(null);
+  };
+
+  const abrirOpinionSeleccionada = (opinion: Opinion) => {
+    if (!opinion.nombre_receta) {
+      setSeccionOpiniones('generales');
+      return;
+    }
+    const receta = CATALOGO_COMPLETO.find((item) =>
+      item.nombre.toLocaleLowerCase('es-MX') === opinion.nombre_receta?.toLocaleLowerCase('es-MX')) ?? null;
+    abrirOpiniones(receta, opinion.nombre_receta);
   };
 
   const abrirContacto = () => {
@@ -484,7 +530,7 @@ export default function App() {
           nombre: nombreOpinion.trim() || 'Anónimo',
           calificacion: calificacionOpinion,
           comentario: textoOpinion.trim(),
-          receta: recetaOpinion?.nombre ?? 'La app',
+          receta: recetaOpinionNombre ?? 'La app',
         }),
       });
       const datos = await respuesta.json();
@@ -492,7 +538,7 @@ export default function App() {
       setTextoOpinion('');
       if (datos.opinion) setOpiniones((actuales) => [datos.opinion, ...actuales].slice(0, 100));
       setEstadoOpinion(datos.mensaje ?? '¡Gracias por compartir tu opinión!');
-      if (!(await cargarOpiniones())) {
+      if (!(await cargarOpiniones(recetaOpinionNombre))) {
         setEstadoOpinion('Tu opinión se guardó, pero no se pudo actualizar la lista. Intenta recargarla en unos momentos.');
       }
     } catch (error) {
@@ -1089,88 +1135,142 @@ export default function App() {
     );
   };
 
-  const mostrarOpiniones = () => (
-    <View style={styles.contenedorPantalla}>
-      {botonRegreso('Volver', volver)}
-      <ScrollView style={styles.listaDesplazable} contentContainerStyle={styles.contenidoDetalle} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {encabezado(
-          recetaOpinion ? `Opiniones: ${recetaOpinion.nombre}` : 'Opiniones de la comunidad',
-          'Califica la receta o cuéntanos qué te pareció la aplicación.',
-        )}
-        <View style={styles.resumenOpiniones}>
-          <Text style={styles.estrellasResumen}>{promedioOpiniones ? `${'★'.repeat(Math.round(promedioOpiniones))}${'☆'.repeat(5 - Math.round(promedioOpiniones))}` : '☆☆☆☆☆'}</Text>
-          <Text style={styles.promedioOpiniones}>{promedioOpiniones ? `${promedioOpiniones} de 5` : 'Sé la primera opinión'}</Text>
-          <Text style={styles.textoSecundario}>{opiniones.length} {opiniones.length === 1 ? 'opinión' : 'opiniones'}</Text>
-        </View>
-
-        <View style={styles.seccionDetalle}>
-          <Text style={styles.tituloSeccion}>Comparte tu experiencia</Text>
-          <TextInput
-            value={nombreOpinion}
-            onChangeText={setNombreOpinion}
-            placeholder="Tu nombre (opcional)"
-            placeholderTextColor="#8B958B"
-            style={styles.campoFormulario}
-            maxLength={80}
-            accessibilityLabel="Tu nombre para la opinión"
-          />
-          <Text style={styles.etiquetaFormulario}>Tu calificación</Text>
-          <View style={styles.selectorEstrellas}>
-            {[1, 2, 3, 4, 5].map((estrella) => (
-              <TouchableOpacity
-                key={estrella}
-                onPress={() => setCalificacionOpinion(estrella)}
-                style={styles.botonEstrella}
-                accessibilityRole="button"
-                accessibilityLabel={`${estrella} ${estrella === 1 ? 'estrella' : 'estrellas'}`}
-                accessibilityState={{ selected: calificacionOpinion === estrella }}
-              >
-                <Text style={[styles.textoEstrella, estrella <= calificacionOpinion && styles.textoEstrellaActiva]}>{estrella <= calificacionOpinion ? '★' : '☆'}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TextInput
-            value={textoOpinion}
-            onChangeText={setTextoOpinion}
-            placeholder="¿Qué te gustó? ¿Cambiarías algo? (10 a 600 caracteres)"
-            placeholderTextColor="#8B958B"
-            style={[styles.campoFormulario, styles.campoMultilinea]}
-            multiline
-            maxLength={600}
-            textAlignVertical="top"
-            accessibilityLabel="Escribe tu opinión"
-          />
-          <Text style={styles.contadorFormulario}>{textoOpinion.length}/600</Text>
-          {estadoOpinion ? <Text style={styles.estadoFormulario}>{estadoOpinion}</Text> : null}
+  const mostrarOpiniones = () => {
+    const opinionesGenerales = opiniones.filter((opinion) => !opinion.nombre_receta);
+    const opinionesRecetas = opiniones.filter((opinion) => Boolean(opinion.nombre_receta));
+    const opinionesVisibles = recetaOpinionNombre
+      ? opiniones
+      : seccionOpiniones === 'generales' ? opinionesGenerales : opinionesRecetas;
+    const promedioCalculado = opinionesVisibles.length
+      ? opinionesVisibles.reduce((total, opinion) => total + opinion.calificacion, 0) / opinionesVisibles.length
+      : 0;
+    const promedioVisible = recetaOpinionNombre && promedioOpiniones
+      ? promedioOpiniones
+      : promedioCalculado;
+    const selectorEstrellas = (origen: string) => (
+      <View style={styles.selectorEstrellas}>
+        {[1, 2, 3, 4, 5].map((estrella) => (
           <TouchableOpacity
-            style={[styles.botonPrincipal, (enviandoOpinion || textoOpinion.trim().length < 10) && styles.botonDeshabilitado]}
-            onPress={enviarOpinion}
-            disabled={enviandoOpinion || textoOpinion.trim().length < 10}
+            key={`${origen}-${estrella}`}
+            onPress={() => setCalificacionOpinion(estrella)}
+            style={styles.botonEstrella}
             accessibilityRole="button"
+            accessibilityLabel={`${origen}: calificar con ${estrella} ${estrella === 1 ? 'estrella' : 'estrellas'}`}
+            accessibilityState={{ selected: calificacionOpinion === estrella }}
           >
-            <Text style={styles.textoBotonPrincipal}>{enviandoOpinion ? 'Enviando opinión…' : 'Publicar opinión'}</Text>
+            <Text style={[styles.textoEstrella, estrella <= calificacionOpinion && styles.textoEstrellaActiva]}>{estrella <= calificacionOpinion ? '★' : '☆'}</Text>
           </TouchableOpacity>
-          <Text style={styles.notaFormulario}>Tu opinión se guardará en la aplicación para ayudar a otras personas.</Text>
-        </View>
+        ))}
+      </View>
+    );
 
-        <Text style={styles.tituloSeccionLista}>Lo que comparte la comunidad</Text>
-        {cargandoOpiniones ? (
-          <ActivityIndicator color="#267348" style={styles.cargandoOpiniones} />
-        ) : opiniones.length ? opiniones.map((opinion) => (
-          <View key={opinion.id_opinion} style={styles.tarjetaOpinion}>
-            <View style={styles.filaOpinion}>
-              <Text style={styles.nombreOpinion}>{opinion.nombre_usuario || 'Anónimo'}</Text>
-              <Text style={styles.fechaOpinion}>{new Date(opinion.creado_en).toLocaleDateString('es-MX')}</Text>
+    return (
+      <View style={styles.contenedorPantalla}>
+        {botonRegreso('Volver', volver)}
+        <ScrollView style={styles.listaDesplazable} contentContainerStyle={styles.contenidoDetalle} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {encabezado(
+            recetaOpinionNombre ? `Opiniones: ${recetaOpinionNombre}` : 'Opiniones de la comunidad',
+            recetaOpinionNombre ? 'Lee comentarios y comparte tu calificación para esta receta.' : 'Consulta por separado las opiniones generales y las de cada receta.',
+          )}
+          {!recetaOpinionNombre ? (
+            <View style={styles.tabsOpiniones}>
+              {(['generales', 'recetas'] as const).map((seccion) => (
+                <TouchableOpacity
+                  key={seccion}
+                  style={[styles.tabOpinion, seccionOpiniones === seccion && styles.tabOpinionActivo]}
+                  onPress={() => setSeccionOpiniones(seccion)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: seccionOpiniones === seccion }}
+                >
+                  <Text style={[styles.textoTabOpinion, seccionOpiniones === seccion && styles.textoTabOpinionActivo]}>
+                    {seccion === 'generales' ? `Generales (${opinionesGenerales.length})` : `De recetas (${opinionesRecetas.length})`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            <Text style={styles.estrellasOpinion}>{'★'.repeat(opinion.calificacion)}{'☆'.repeat(5 - opinion.calificacion)}</Text>
-            <Text style={styles.comentarioOpinion}>{opinion.comentario}</Text>
+          ) : (
+            <TouchableOpacity style={styles.botonListaOpiniones} onPress={() => abrirListaOpiniones('recetas')} accessibilityRole="button">
+              <Text style={styles.textoBotonListaOpiniones}>← Ver todas las opiniones de recetas</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.resumenOpiniones}>
+            <Text style={styles.etiquetaFormulario}>Elige tu calificación</Text>
+            {selectorEstrellas('Primera calificación')}
+            <Text style={styles.promedioOpiniones}>Tu selección: {calificacionOpinion} de 5</Text>
+            <Text style={styles.textoSecundario}>
+              {promedioVisible ? `Promedio visible: ${promedioVisible.toFixed(1)} de 5 · ` : ''}
+              {opinionesVisibles.length} {opinionesVisibles.length === 1 ? 'opinión' : 'opiniones'}
+            </Text>
           </View>
-        )) : (
-          <Text style={styles.textoSinOpiniones}>{estadoOpinion || 'Todavía no hay opiniones. ¡Puedes iniciar la conversación!'}</Text>
-        )}
-      </ScrollView>
-    </View>
-  );
+
+          <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Comparte tu experiencia</Text>
+            <TextInput
+              value={nombreOpinion}
+              onChangeText={setNombreOpinion}
+              placeholder="Tu nombre (opcional)"
+              placeholderTextColor="#8B958B"
+              style={styles.campoFormulario}
+              maxLength={80}
+              accessibilityLabel="Tu nombre para la opinión"
+            />
+            <Text style={styles.etiquetaFormulario}>Tu calificación</Text>
+            {selectorEstrellas('Segunda calificación')}
+            <Text style={styles.notaFormulario}>Calificación elegida: {calificacionOpinion}/5. Al publicar, aparecerá junto a tu opinión.</Text>
+            <TextInput
+              value={textoOpinion}
+              onChangeText={setTextoOpinion}
+              placeholder="¿Qué te gustó? ¿Cambiarías algo? (10 a 600 caracteres)"
+              placeholderTextColor="#8B958B"
+              style={[styles.campoFormulario, styles.campoMultilinea]}
+              multiline
+              maxLength={600}
+              textAlignVertical="top"
+              accessibilityLabel="Escribe tu opinión"
+            />
+            <Text style={styles.contadorFormulario}>{textoOpinion.length}/600</Text>
+            {estadoOpinion ? <Text style={styles.estadoFormulario}>{estadoOpinion}</Text> : null}
+            <TouchableOpacity
+              style={[styles.botonPrincipal, (enviandoOpinion || textoOpinion.trim().length < 10) && styles.botonDeshabilitado]}
+              onPress={enviarOpinion}
+              disabled={enviandoOpinion || textoOpinion.trim().length < 10}
+              accessibilityRole="button"
+            >
+              <Text style={styles.textoBotonPrincipal}>{enviandoOpinion ? 'Enviando opinión…' : 'Publicar opinión'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.notaFormulario}>Tu opinión se guardará en la aplicación para ayudar a otras personas.</Text>
+          </View>
+
+          <Text style={styles.tituloSeccionLista}>
+            {recetaOpinionNombre ? `Opiniones de ${recetaOpinionNombre}` : seccionOpiniones === 'generales' ? 'Opiniones generales de la aplicación' : 'Opiniones vinculadas a recetas'}
+          </Text>
+          {cargandoOpiniones ? (
+            <ActivityIndicator color="#267348" style={styles.cargandoOpiniones} />
+          ) : opinionesVisibles.length ? opinionesVisibles.map((opinion) => (
+            <TouchableOpacity
+              key={opinion.id_opinion}
+              style={styles.tarjetaOpinion}
+              onPress={() => abrirOpinionSeleccionada(opinion)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={opinion.nombre_receta ? `Abrir opiniones de ${opinion.nombre_receta}` : 'Abrir opiniones generales'}
+            >
+              <View style={styles.filaOpinion}>
+                <Text style={styles.nombreOpinion}>{opinion.nombre_usuario || 'Anónimo'}</Text>
+                <Text style={styles.fechaOpinion}>{new Date(opinion.creado_en).toLocaleDateString('es-MX')}</Text>
+              </View>
+              <Text style={styles.estrellasOpinion}>{'★'.repeat(opinion.calificacion)}{'☆'.repeat(5 - opinion.calificacion)} · {opinion.calificacion}/5</Text>
+              {opinion.nombre_receta ? <Text style={styles.etiquetaRecetaOpinion}>Receta: {opinion.nombre_receta} · Ver opiniones →</Text> : <Text style={styles.etiquetaRecetaOpinion}>Opinión general · Ver opiniones →</Text>}
+              <Text style={styles.comentarioOpinion}>{opinion.comentario}</Text>
+            </TouchableOpacity>
+          )) : (
+            <Text style={styles.textoSinOpiniones}>{estadoOpinion || 'Todavía no hay opiniones en esta sección. ¡Puedes iniciar la conversación!'}</Text>
+          )}
+        </ScrollView>
+      </View>
+    );
+  };
 
   const mostrarContacto = () => (
     <View style={styles.contenedorPantalla}>
@@ -1238,9 +1338,10 @@ export default function App() {
     if (!recetaSeleccionada) {
       return (
         <View style={styles.contenedorPantalla}>
-          {botonRegreso('Volver a recetas', () =>
-            setPantalla('resultados'),
-          )}
+          {botonRegreso('Volver a recetas', () => {
+            setRecetaSeleccionada(null);
+            setPantalla('catalogo');
+          })}
 
           <Text style={styles.textoMensajeVacio}>
             No se ha seleccionado ninguna receta.
@@ -2858,6 +2959,49 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  tabsOpiniones: {
+    flexDirection: 'row',
+    backgroundColor: '#EAF0E7',
+    borderRadius: 13,
+    padding: 4,
+    marginBottom: 12,
+  },
+
+  tabOpinion: {
+    flex: 1,
+    minHeight: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+  },
+
+  tabOpinionActivo: {
+    backgroundColor: '#FFFFFF',
+  },
+
+  textoTabOpinion: {
+    color: '#647267',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  textoTabOpinionActivo: {
+    color: '#267348',
+  },
+
+  botonListaOpiniones: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+
+  textoBotonListaOpiniones: {
+    color: '#267348',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   estrellasResumen: {
     color: '#D59A26',
     fontSize: 25,
@@ -2964,6 +3108,13 @@ const styles = StyleSheet.create({
     borderColor: '#E1E8DE',
     padding: 14,
     marginBottom: 10,
+  },
+
+  etiquetaRecetaOpinion: {
+    color: '#267348',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 5,
   },
 
   filaOpinion: {
