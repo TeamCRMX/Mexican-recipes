@@ -1339,6 +1339,7 @@ export default function App() {
       return (
         <View style={styles.contenedorPantalla}>
           {botonRegreso('Volver a recetas', () => {
+            setHistorialRecetas([]);
             setRecetaSeleccionada(null);
             setPantalla('catalogo');
           })}
@@ -1554,7 +1555,11 @@ export default function App() {
 
           <TouchableOpacity
             style={styles.botonPrincipal}
-            onPress={() => setPantalla('ingredientes')}
+            onPress={() => {
+              setHistorialRecetas([]);
+              setRecetaSeleccionada(null);
+              setPantalla('ingredientes');
+            }}
             activeOpacity={0.75}
             accessibilityRole="button"
           >
