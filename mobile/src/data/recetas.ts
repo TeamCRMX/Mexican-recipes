@@ -11,6 +11,7 @@ export const CATEGORIAS_RECETA = [
   'Entrada',
   'Postre',
   'Acompañamiento',
+  'Bebidas',
 ] as const;
 
 export type CategoriaReceta = (typeof CATEGORIAS_RECETA)[number];
@@ -30,6 +31,9 @@ export type Receta = {
   equipos: string[];
   preparacion: string[];
   fuenteUrl?: string;
+  /** Categorías de platillo con las que se recomienda servir esta bebida. */
+  acompanamientoPara?: CategoriaReceta[];
+  esAlcoholica?: boolean;
 };
 
 const CATEGORIA_POR_RECETA: Record<string, CategoriaReceta> = {

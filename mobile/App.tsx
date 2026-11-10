@@ -16,12 +16,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import {
   CATEGORIAS_RECETA,
-  INGREDIENTES_DISPONIBLES,
   RECETAS,
   type CategoriaReceta,
   type Receta,
 } from './src/data/recetas';
-import { obtenerBebidasParaAcompanamiento } from './src/data/bebidas';
+import { BEBIDAS, obtenerBebidasParaAcompanamiento } from './src/data/bebidas';
+
+const CATALOGO_COMPLETO: Receta[] = [...RECETAS, ...BEBIDAS];
+const INGREDIENTES_CATALOGO = Array.from(
+  new Map(
+    CATALOGO_COMPLETO.flatMap((receta) => receta.ingredientes)
+      .map((ingrediente) => [ingrediente.nombre, { nombre: ingrediente.nombre, categoria: ingrediente.categoria }]),
+  ).values(),
+).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
@@ -41,6 +48,7 @@ const ICONO_CATEGORIA: Record<CategoriaReceta, string> = {
   Entrada: '🥣',
   Postre: '🍮',
   Acompañamiento: '🥗',
+  Bebidas: '🥤',
 };
 
 const getBackendUrl = () => {
@@ -82,6 +90,7 @@ export default function App() {
   >([]);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
+  const [historialRecetas, setHistorialRecetas] = useState<ResultadoReceta[]>([]);
   const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
   const [cargando, setCargando] = useState(false);
   const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
@@ -136,6 +145,14 @@ export default function App() {
 
   const volver = useCallback(() => {
     if (pantalla === 'detalle') {
+      if (historialRecetas.length > 0) {
+        const anteriores = [...historialRecetas];
+        const recetaAnterior = anteriores.pop()!;
+        setHistorialRecetas(anteriores);
+        setRecetaSeleccionada(recetaAnterior);
+        setPasosCompletados([]);
+        return true;
+      }
       setPantalla(pantallaAnterior);
       return true;
     }
@@ -161,7 +178,7 @@ export default function App() {
     }
 
     return false;
-  }, [pantalla, pantallaAnterior]);
+  }, [historialRecetas, pantalla, pantallaAnterior]);
 
   useEffect(() => {
     const suscripcion = BackHandler.addEventListener(
@@ -218,7 +235,7 @@ export default function App() {
     }
 
     setCargando(true);
-    const resultadosLocales = RECETAS.map(crearResultadoLocal);
+    const resultadosLocales = CATALOGO_COMPLETO.map(crearResultadoLocal);
     const controlador = new AbortController();
     const temporizador = setTimeout(() => controlador.abort(), 6000);
 
@@ -268,7 +285,7 @@ export default function App() {
         ]),
       );
       const catalogoTotal = Number(datos.catalogoTotal ?? recomendacionesServidor.length);
-      const catalogoParcial = catalogoTotal < RECETAS.length;
+      const catalogoParcial = catalogoTotal < CATALOGO_COMPLETO.length;
       const resultados = resultadosLocales.map((local) => {
         const servidor = recetasServidor.get(local.nombre.toLocaleLowerCase('es-MX')) as
           | {
@@ -321,7 +338,12 @@ export default function App() {
   };
 
   const abrirDetalle = (receta: ResultadoReceta) => {
-    setPantallaAnterior(pantalla);
+    if (pantalla === 'detalle' && recetaSeleccionada) {
+      setHistorialRecetas((actuales) => [...actuales, recetaSeleccionada]);
+    } else {
+      setHistorialRecetas([]);
+      setPantallaAnterior(pantalla);
+    }
     setRecetaSeleccionada(receta);
     setPasosCompletados([]);
     setPantalla('detalle');
@@ -377,7 +399,7 @@ export default function App() {
     </View>
   );
 
-  const ingredientesFiltrados = INGREDIENTES_DISPONIBLES.filter((ingrediente) =>
+  const ingredientesFiltrados = INGREDIENTES_CATALOGO.filter((ingrediente) =>
     `${ingrediente.nombre} ${ingrediente.categoria}`
       .toLocaleLowerCase('es-MX')
       .includes(busquedaIngrediente.trim().toLocaleLowerCase('es-MX')),
@@ -385,7 +407,7 @@ export default function App() {
 
   const vistaPreviaRecetas = ingredientesSeleccionados.length === 0
     ? []
-    : RECETAS.map(crearResultadoLocal)
+    : CATALOGO_COMPLETO.map(crearResultadoLocal)
       .filter((resultado) => resultado.porcentaje >= 50)
       .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
 
@@ -394,7 +416,7 @@ export default function App() {
     .replace(/[\u0300-\u036f]/g, '')
     .toLocaleLowerCase('es-MX');
 
-  const recetasFiltradas = RECETAS.filter((receta) => {
+  const recetasFiltradas = CATALOGO_COMPLETO.filter((receta) => {
     const campos = normalizarTexto([
       receta.nombre,
       receta.descripcion,
@@ -528,17 +550,17 @@ export default function App() {
 
         <View style={styles.resumenInicio}>
           <View style={styles.datoInicio}>
-            <Text style={styles.numeroInicio}>{RECETAS.length}</Text>
+            <Text style={styles.numeroInicio}>{CATALOGO_COMPLETO.length}</Text>
             <Text style={styles.etiquetaInicio}>recetas mexicanas</Text>
           </View>
           <View style={styles.separadorInicio} />
           <View style={styles.datoInicio}>
-            <Text style={styles.numeroInicio}>{INGREDIENTES_DISPONIBLES.length}</Text>
+            <Text style={styles.numeroInicio}>{INGREDIENTES_CATALOGO.length}</Text>
             <Text style={styles.etiquetaInicio}>ingredientes</Text>
           </View>
           <View style={styles.separadorInicio} />
           <View style={styles.datoInicio}>
-            <Text style={styles.numeroInicio}>6</Text>
+            <Text style={styles.numeroInicio}>{CATEGORIAS_RECETA.length}</Text>
             <Text style={styles.etiquetaInicio}>categorías</Text>
           </View>
         </View>
@@ -708,7 +730,7 @@ export default function App() {
         </View>
 
         <View style={styles.filaConteoCatalogo}>
-          <Text style={styles.textoConteoCatalogo}>{recetasFiltradas.length} de {RECETAS.length} recetas</Text>
+          <Text style={styles.textoConteoCatalogo}>{recetasFiltradas.length} de {CATALOGO_COMPLETO.length} recetas</Text>
           <TouchableOpacity onPress={() => {
             setBusquedaCatalogo('');
             setIngredienteFiltro('');
@@ -793,7 +815,7 @@ export default function App() {
         clearButtonMode="while-editing"
       />
       <Text style={styles.textoAyudaIngredientes}>
-        {ingredientesFiltrados.length} ingredientes disponibles · {RECETAS.length} recetas mexicanas
+        {ingredientesFiltrados.length} ingredientes disponibles · {CATALOGO_COMPLETO.length} recetas mexicanas
       </Text>
 
       <ScrollView
@@ -900,7 +922,18 @@ export default function App() {
   );
 
   const mostrarResultados = () => {
-    const resultados = resultadosAPI;
+    const idsServidor = new Map(resultadosAPI.map((resultado) => [
+      resultado.nombre.toLocaleLowerCase('es-MX'), resultado.id,
+    ]));
+    const resultados = ingredientesSeleccionados.length === 0
+      ? []
+      : CATALOGO_COMPLETO.map((receta) => {
+        const resultado = crearResultadoLocal(receta);
+        const idServidor = idsServidor.get(receta.nombre.toLocaleLowerCase('es-MX'));
+        return idServidor === undefined ? resultado : { ...resultado, id: idServidor };
+      })
+        .filter((resultado) => resultado.porcentaje >= 50)
+        .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
 
     return (
       <View style={styles.contenedorPantalla}>
@@ -1262,19 +1295,35 @@ export default function App() {
             )}
           </View>
 
-          <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>Bebidas para acompañar</Text>
-            <Text style={styles.textoSecundario}>Opciones de restaurante que combinan con esta receta.</Text>
-            {obtenerBebidasParaAcompanamiento(recetaSeleccionada.categoria).map((bebida) => (
-              <View key={bebida.id} style={styles.filaBebidaAcompanamiento}>
-                <Text style={styles.emojiBebidaAcompanamiento}>{bebida.emoji}</Text>
-                <View style={styles.detalleBebidaAcompanamiento}>
-                  <Text style={styles.nombreBebidaAcompanamiento}>{bebida.nombre}</Text>
-                  <Text style={styles.textoBebidaAcompanamiento}>{bebida.descripcion}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
+          {recetaActual.categoria !== 'Bebidas' && obtenerBebidasParaAcompanamiento(recetaActual.categoria).length > 0 ? (
+            <View style={styles.seccionDetalle}>
+              <Text style={styles.tituloSeccion}>Bebidas para acompañar</Text>
+              <Text style={styles.textoSecundario}>Toca una opción para ver sus ingredientes y preparación completa.</Text>
+              {obtenerBebidasParaAcompanamiento(recetaActual.categoria).map((bebida) => (
+                <TouchableOpacity
+                  key={bebida.id}
+                  style={styles.filaBebidaAcompanamiento}
+                  onPress={() => abrirDetalle(crearResultadoLocal(bebida))}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver receta de bebida: ${bebida.nombre}`}
+                >
+                  <Text style={styles.emojiBebidaAcompanamiento}>{bebida.emoji}</Text>
+                  <View style={styles.detalleBebidaAcompanamiento}>
+                    <Text style={styles.nombreBebidaAcompanamiento}>{bebida.nombre}  ›</Text>
+                    <Text style={styles.textoBebidaAcompanamiento}>{bebida.descripcion}</Text>
+                    {bebida.esAlcoholica ? <Text style={styles.notaAlcoholica}>Contiene alcohol · solo para personas adultas</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          {recetaActual.esAlcoholica ? (
+            <View style={styles.avisoAlcoholico}>
+              <Text style={styles.textoAvisoAlcoholico}>Bebida con alcohol. Solo para mayores de edad; no conduzcas después de consumirla.</Text>
+            </View>
+          ) : null}
 
           <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Ingredientes</Text>
@@ -1297,7 +1346,7 @@ export default function App() {
                   <View style={styles.infoIngredienteChecklist}>
                     <Text style={[styles.cajaChecklist, revisado && styles.cajaChecklistActiva]}>{revisado ? '✓' : loTienes ? '•' : '＋'}</Text>
                     <View style={styles.contenidoIngrediente}>
-                    <Text style={[styles.elementoLista, pendiente && styles.elementoFaltante]}>{ingrediente.nombre}</Text>
+                      <Text style={[styles.elementoLista, pendiente && styles.elementoFaltante]}>{ingrediente.nombre}</Text>
                       <Text style={styles.categoriaDetalleIngrediente}>{ingrediente.categoria} · {loTienes ? 'lo tienes' : 'te falta'}</Text>
                     </View>
                   </View>
@@ -1331,14 +1380,14 @@ export default function App() {
                 <Text style={styles.tituloSeccion}>Preparación paso a paso</Text>
                 <Text style={styles.textoSecundario}>Toca cada paso cuando lo termines.</Text>
               </View>
-              <Text style={styles.progresoPasos}>{pasosCompletados.length}/{recetaSeleccionada.preparacion.length}</Text>
+              <Text style={styles.progresoPasos}>{pasosCompletados.length}/{recetaActual.preparacion.length}</Text>
             </View>
             <View style={styles.fondoProgresoPasos}>
-              <View style={[styles.barraProgresoPasos, { width: `${recetaSeleccionada.preparacion.length ? (pasosCompletados.length / recetaSeleccionada.preparacion.length) * 100 : 0}%` }]} />
+              <View style={[styles.barraProgresoPasos, { width: `${recetaActual.preparacion.length ? (pasosCompletados.length / recetaActual.preparacion.length) * 100 : 0}%` }]} />
             </View>
-            {recetaSeleccionada.preparacion.map((paso, indice) => (
+            {recetaActual.preparacion.map((paso, indice) => (
               <TouchableOpacity
-                key={`${recetaSeleccionada.id}-paso-${indice}`}
+                key={`${recetaActual.id}-paso-${indice}`}
                 style={[styles.filaPaso, pasosCompletados.includes(indice) && styles.filaPasoCompletada]}
                 onPress={() => alternarPaso(indice)}
                 activeOpacity={0.75}
@@ -1352,16 +1401,16 @@ export default function App() {
             ))}
           </View>
 
-          {recetaSeleccionada.consejo ? (
+          {recetaActual.consejo ? (
             <View style={styles.tarjetaConsejo}>
               <Text style={styles.tituloConsejo}>👩‍🍳 Consejo de cocina</Text>
-              <Text style={styles.textoConsejo}>{recetaSeleccionada.consejo}</Text>
+              <Text style={styles.textoConsejo}>{recetaActual.consejo}</Text>
             </View>
           ) : null}
 
-          {recetaSeleccionada.fuenteUrl && (
+          {recetaActual.fuenteUrl && (
             <TouchableOpacity
-              onPress={() => Linking.openURL(recetaSeleccionada.fuenteUrl!).catch(() =>
+              onPress={() => Linking.openURL(recetaActual.fuenteUrl!).catch(() =>
                 Alert.alert('No se pudo abrir el enlace', 'Revisa tu conexión e inténtalo nuevamente.'),
               )}
               style={styles.botonFuente}
@@ -2133,6 +2182,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: '#58645A',
+  },
+
+  notaAlcoholica: {
+    color: '#915221',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+
+  avisoAlcoholico: {
+    backgroundColor: '#FFF1DE',
+    borderColor: '#E9C28B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+
+  textoAvisoAlcoholico: {
+    color: '#794617',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
   },
 
   notaDetalle: {
