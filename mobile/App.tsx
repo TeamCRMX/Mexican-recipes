@@ -588,7 +588,7 @@ export default function App() {
                 <Text style={styles.iconoCategoriaInicio}>{ICONO_CATEGORIA[categoria]}</Text>
                 <View style={styles.textoCategoriaInicio}>
                   <Text style={styles.nombreCategoriaInicio}>{categoria}</Text>
-                  <Text style={styles.cantidadCategoriaInicio}>{RECETAS.filter((item) => item.categoria === categoria).length} recetas</Text>
+                  <Text style={styles.cantidadCategoriaInicio}>{CATALOGO_COMPLETO.filter((item) => item.categoria === categoria).length} recetas</Text>
                 </View>
                 <Text style={styles.flechaCategoriaInicio}>›</Text>
               </TouchableOpacity>
