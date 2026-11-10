@@ -94,7 +94,6 @@ export default function App() {
   const [ordenCatalogo, setOrdenCatalogo] = useState<'Recomendadas' | 'Más rápidas' | 'A-Z'>('Recomendadas');
   const [recetaDestacada, setRecetaDestacada] = useState<Receta>(RECETAS[0]);
   const [pasosCompletados, setPasosCompletados] = useState<number[]>([]);
-  const [ingredientesRevisados, setIngredientesRevisados] = useState<string[]>([]);
   const [recetaOpinion, setRecetaOpinion] = useState<Receta | null>(null);
   const [opiniones, setOpiniones] = useState<Opinion[]>([]);
   const [promedioOpiniones, setPromedioOpiniones] = useState(0);
@@ -325,7 +324,6 @@ export default function App() {
     setPantallaAnterior(pantalla);
     setRecetaSeleccionada(receta);
     setPasosCompletados([]);
-    setIngredientesRevisados([]);
     setPantalla('detalle');
   };
 
@@ -350,12 +348,6 @@ export default function App() {
     setPasosCompletados((actuales) => actuales.includes(indice)
       ? actuales.filter((item) => item !== indice)
       : [...actuales, indice]);
-  };
-
-  const alternarIngredienteRevisado = (nombre: string) => {
-    setIngredientesRevisados((actuales) => actuales.includes(nombre)
-      ? actuales.filter((item) => item !== nombre)
-      : [...actuales, nombre]);
   };
 
   const botonRegreso = (
@@ -1194,6 +1186,8 @@ export default function App() {
       );
     }
 
+    const recetaActual = crearResultadoLocal(recetaSeleccionada);
+
     return (
       <View style={styles.contenedorPantalla}>
         {botonRegreso('Volver a recetas', volver)}
@@ -1204,15 +1198,15 @@ export default function App() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.heroDetalleReceta}>
-            <Text style={styles.emojiDetalleReceta}>{recetaSeleccionada.emoji}</Text>
+            <Text style={styles.emojiDetalleReceta}>{recetaActual.emoji}</Text>
             <View style={styles.textoHeroDetalle}>
-              <Text style={styles.categoriaDetalle}>{ICONO_CATEGORIA[recetaSeleccionada.categoria]} {recetaSeleccionada.categoria}</Text>
-              <Text style={styles.tituloDetalle}>{recetaSeleccionada.nombre}</Text>
+              <Text style={styles.categoriaDetalle}>{ICONO_CATEGORIA[recetaActual.categoria]} {recetaActual.categoria}</Text>
+              <Text style={styles.tituloDetalle}>{recetaActual.nombre}</Text>
             </View>
           </View>
 
           <Text style={styles.descripcionDetalle}>
-            {recetaSeleccionada.descripcion}
+            {recetaActual.descripcion}
           </Text>
 
           <View style={styles.tarjetaDatosDetalle}>
@@ -1220,21 +1214,21 @@ export default function App() {
               <Text style={styles.iconoDato}>⏱</Text>
               <Text style={styles.etiquetaDato}>Tiempo</Text>
               <Text style={styles.valorDato}>
-                {recetaSeleccionada.tiempoMin} min
+                {recetaActual.tiempoMin} min
               </Text>
             </View>
 
             <View style={styles.datoDetalle}>
               <Text style={styles.iconoDato}>🍽️</Text>
               <Text style={styles.etiquetaDato}>Porciones</Text>
-              <Text style={styles.valorDato}>{recetaSeleccionada.porciones}</Text>
+              <Text style={styles.valorDato}>{recetaActual.porciones}</Text>
             </View>
 
             <View style={styles.datoDetalle}>
               <Text style={styles.iconoDato}>👨‍🍳</Text>
               <Text style={styles.etiquetaDato}>Dificultad</Text>
               <Text style={styles.valorDato}>
-                {recetaSeleccionada.dificultad}
+                {recetaActual.dificultad}
               </Text>
             </View>
 
@@ -1242,7 +1236,7 @@ export default function App() {
               <Text style={styles.iconoDato}>✓</Text>
               <Text style={styles.etiquetaDato}>Coincidencia</Text>
               <Text style={styles.valorDato}>
-                {ingredientesSeleccionados.length ? `${recetaSeleccionada.porcentaje}%` : 'Sin comparar'}
+                {ingredientesSeleccionados.length ? `${recetaActual.porcentaje}%` : 'Sin comparar'}
               </Text>
             </View>
           </View>
@@ -1251,16 +1245,16 @@ export default function App() {
             <Text style={styles.tituloSeccion}>Revisa antes de comenzar</Text>
             <Text style={styles.textoSecundario}>Ten listos estos utensilios y equipos antes de preparar la receta.</Text>
             <Text style={styles.subtituloListaRecursos}>Equipos y dispositivos</Text>
-            {recetaSeleccionada.equipos.length > 0 ? (
-              recetaSeleccionada.equipos.map((equipo) => (
+            {recetaActual.equipos.length > 0 ? (
+              recetaActual.equipos.map((equipo) => (
                 <Text key={equipo} style={styles.elementoLista}>• {equipo}</Text>
               ))
             ) : (
               <Text style={styles.textoSecundario}>No requiere equipos eléctricos específicos.</Text>
             )}
             <Text style={styles.subtituloListaRecursos}>Utensilios</Text>
-            {recetaSeleccionada.utensilios.length > 0 ? (
-              recetaSeleccionada.utensilios.map((utensilio) => (
+            {recetaActual.utensilios.length > 0 ? (
+              recetaActual.utensilios.map((utensilio) => (
                 <Text key={utensilio} style={styles.elementoLista}>• {utensilio}</Text>
               ))
             ) : (
@@ -1284,17 +1278,17 @@ export default function App() {
 
           <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Ingredientes</Text>
-            <Text style={styles.textoSecundario}>Cantidades para {recetaSeleccionada.porciones} porciones. Toca un ingrediente cuando ya lo tengas listo.</Text>
+            <Text style={styles.textoSecundario}>Cantidades para {recetaActual.porciones} porciones. Marca lo que tienes y desmárcalo cuando se te termine; el faltante y la coincidencia se actualizan al instante.</Text>
 
-            {recetaSeleccionada.ingredientes.map((ingrediente) => {
-              const loTienes = recetaSeleccionada.disponibles.includes(ingrediente.nombre);
-              const revisado = ingredientesRevisados.includes(ingrediente.nombre);
+            {recetaActual.ingredientes.map((ingrediente) => {
+              const loTienes = ingredientesSeleccionados.includes(ingrediente.nombre);
+              const revisado = loTienes;
               const pendiente = ingredientesSeleccionados.length > 0 && !loTienes;
               return (
                 <TouchableOpacity
                   key={ingrediente.nombre}
                   style={styles.filaIngredienteDetalle}
-                  onPress={() => alternarIngredienteRevisado(ingrediente.nombre)}
+                  onPress={() => alternarIngrediente(ingrediente.nombre)}
                   activeOpacity={0.72}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: revisado }}
@@ -1303,8 +1297,8 @@ export default function App() {
                   <View style={styles.infoIngredienteChecklist}>
                     <Text style={[styles.cajaChecklist, revisado && styles.cajaChecklistActiva]}>{revisado ? '✓' : loTienes ? '•' : '＋'}</Text>
                     <View style={styles.contenidoIngrediente}>
-                      <Text style={[styles.elementoLista, pendiente && styles.elementoFaltante, revisado && styles.textoTachado]}>{ingrediente.nombre}</Text>
-                      <Text style={styles.categoriaDetalleIngrediente}>{ingrediente.categoria} · {revisado ? 'listo' : ingredientesSeleccionados.length === 0 ? 'ingrediente' : loTienes ? 'lo tienes' : 'te falta'}</Text>
+                    <Text style={[styles.elementoLista, pendiente && styles.elementoFaltante]}>{ingrediente.nombre}</Text>
+                      <Text style={styles.categoriaDetalleIngrediente}>{ingrediente.categoria} · {loTienes ? 'lo tienes' : 'te falta'}</Text>
                     </View>
                   </View>
                   <Text style={styles.cantidadIngrediente}>{ingrediente.cantidad}</Text>
@@ -1318,8 +1312,8 @@ export default function App() {
 
             {ingredientesSeleccionados.length === 0 ? (
               <Text style={styles.textoSecundario}>Selecciona lo que tienes en casa desde “Buscar con mis ingredientes” para comparar esta receta.</Text>
-            ) : recetaSeleccionada.faltantes.length > 0 ? (
-              recetaSeleccionada.faltantes.map((ingrediente) => (
+            ) : recetaActual.faltantes.length > 0 ? (
+              recetaActual.faltantes.map((ingrediente) => (
                 <Text key={ingrediente} style={styles.elementoFaltante}>
                   • {ingrediente}
                 </Text>
