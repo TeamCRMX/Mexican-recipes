@@ -60,18 +60,19 @@ router.post('/', async (req, res) => {
 
   try {
     let recetaId: number | null = null;
-    let nombreReceta: string | null = null;
+    let nombreReceta: string | null = nombreSolicitado && nombreSolicitado !== 'La app'
+      ? nombreSolicitado
+      : null;
 
     if (nombreSolicitado && nombreSolicitado !== 'La app') {
       const receta = await pool.query<{ id_receta: number; nombre: string }>(
         'SELECT id_receta, nombre FROM recetas WHERE LOWER(nombre) = LOWER($1) LIMIT 1',
         [nombreSolicitado],
       );
-      if (receta.rows.length === 0) {
-        return res.status(404).json({ mensaje: 'No se encontró esa receta. Sincroniza el catálogo e inténtalo de nuevo.' });
+      if (receta.rows.length > 0) {
+        recetaId = receta.rows[0].id_receta;
+        nombreReceta = receta.rows[0].nombre;
       }
-      recetaId = receta.rows[0].id_receta;
-      nombreReceta = receta.rows[0].nombre;
     }
 
     const guardada = await pool.query(

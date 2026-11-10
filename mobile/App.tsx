@@ -118,9 +118,8 @@ export default function App() {
   const [enviandoContacto, setEnviandoContacto] = useState(false);
   const [estadoContacto, setEstadoContacto] = useState('');
 
-  const cargarOpiniones = useCallback(async () => {
+  const cargarOpiniones = useCallback(async (): Promise<boolean> => {
     setCargandoOpiniones(true);
-    setEstadoOpinion('');
     try {
       const query = recetaOpinion
         ? `?receta=${encodeURIComponent(recetaOpinion.nombre)}`
@@ -130,10 +129,10 @@ export default function App() {
       if (!respuesta.ok) throw new Error(datos.mensaje ?? 'No se pudieron cargar las opiniones.');
       setOpiniones(datos.opiniones ?? []);
       setPromedioOpiniones(Number(datos.promedio) || 0);
+      return true;
     } catch {
-      setOpiniones([]);
-      setPromedioOpiniones(0);
       setEstadoOpinion('No se pudieron cargar las opiniones. Revisa tu conexión con el servidor.');
+      return false;
     } finally {
       setCargandoOpiniones(false);
     }
@@ -448,14 +447,17 @@ export default function App() {
     return coincidencia(b) - coincidencia(a) || a.nombre.localeCompare(b.nombre, 'es-MX');
   });
 
+  const correoContactoValido = !correoContacto.trim()
+    || (correoContacto.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoContacto.trim()));
+
   const sorprenderme = () => {
     const indice = Math.floor(Math.random() * RECETAS.length);
     setRecetaDestacada(RECETAS[indice]);
   };
 
   const enviarOpinion = async () => {
-    if (textoOpinion.trim().length < 10) {
-      setEstadoOpinion('Cuéntanos un poco más: escribe al menos 10 caracteres.');
+    if (nombreOpinion.trim().length > 80 || textoOpinion.trim().length < 10 || textoOpinion.trim().length > 600) {
+      setEstadoOpinion('Revisa los campos: el nombre admite hasta 80 caracteres y la opinión debe tener entre 10 y 600.');
       return;
     }
     setEnviandoOpinion(true);
@@ -474,8 +476,11 @@ export default function App() {
       const datos = await respuesta.json();
       if (!respuesta.ok) throw new Error(datos.mensaje ?? 'No se pudo guardar tu opinión.');
       setTextoOpinion('');
-      await cargarOpiniones();
+      if (datos.opinion) setOpiniones((actuales) => [datos.opinion, ...actuales].slice(0, 100));
       setEstadoOpinion(datos.mensaje ?? '¡Gracias por compartir tu opinión!');
+      if (!(await cargarOpiniones())) {
+        setEstadoOpinion('Tu opinión se guardó, pero no se pudo actualizar la lista. Intenta recargarla en unos momentos.');
+      }
     } catch (error) {
       setEstadoOpinion(error instanceof Error
         ? error.message
@@ -486,8 +491,13 @@ export default function App() {
   };
 
   const enviarContacto = async () => {
-    if (nombreContacto.trim().length < 2 || mensajeContacto.trim().length < 10) {
+    const correo = correoContacto.trim();
+    if (nombreContacto.trim().length < 2 || nombreContacto.trim().length > 80 || mensajeContacto.trim().length < 10 || mensajeContacto.trim().length > 1200) {
       setEstadoContacto('Completa tu nombre y escribe un mensaje de al menos 10 caracteres.');
+      return;
+    }
+    if (correo && (correo.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) {
+      setEstadoContacto('Revisa el formato del correo electrónico o déjalo vacío.');
       return;
     }
     setEnviandoContacto(true);
@@ -498,7 +508,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre: nombreContacto.trim(),
-          correo: correoContacto.trim(),
+          correo,
           mensaje: mensajeContacto.trim(),
         }),
       });
@@ -1177,6 +1187,9 @@ export default function App() {
             maxLength={254}
             accessibilityLabel="Correo electrónico para responder"
           />
+          {correoContacto.trim() && !correoContactoValido ? (
+            <Text style={styles.errorValidacion}>Escribe un correo válido o déjalo vacío.</Text>
+          ) : null}
           <TextInput
             value={mensajeContacto}
             onChangeText={setMensajeContacto}
@@ -1192,9 +1205,9 @@ export default function App() {
           <Text style={styles.notaFormulario}>El mensaje y el correo opcional se guardan en el servidor del proyecto para su seguimiento.</Text>
           {estadoContacto ? <Text style={styles.estadoFormulario}>{estadoContacto}</Text> : null}
           <TouchableOpacity
-            style={[styles.botonPrincipal, (enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2) && styles.botonDeshabilitado]}
+            style={[styles.botonPrincipal, (enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2 || !correoContactoValido) && styles.botonDeshabilitado]}
             onPress={enviarContacto}
-            disabled={enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2}
+            disabled={enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2 || !correoContactoValido}
             accessibilityRole="button"
           >
             <Text style={styles.textoBotonPrincipal}>{enviandoContacto ? 'Enviando mensaje…' : 'Enviar mensaje'}</Text>
@@ -1434,7 +1447,7 @@ export default function App() {
 
           <TouchableOpacity
             style={styles.botonOpinionesDetalle}
-            onPress={() => abrirOpiniones(recetaSeleccionada)}
+            onPress={() => abrirOpiniones(recetaActual)}
             activeOpacity={0.75}
             accessibilityRole="button"
           >
@@ -2891,6 +2904,14 @@ const styles = StyleSheet.create({
     padding: 11,
     fontSize: 13,
     lineHeight: 19,
+    marginBottom: 8,
+  },
+
+  errorValidacion: {
+    color: '#A43F35',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: -5,
     marginBottom: 8,
   },
 
