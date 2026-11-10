@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   BackHandler,
@@ -10,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Easing,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -117,6 +119,11 @@ export default function App() {
   const [mensajeContacto, setMensajeContacto] = useState('');
   const [enviandoContacto, setEnviandoContacto] = useState(false);
   const [estadoContacto, setEstadoContacto] = useState('');
+  const animacionDado = useRef(new Animated.Value(0)).current;
+  const rotacionDado = animacionDado.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '720deg'],
+  });
 
   const cargarOpiniones = useCallback(async (): Promise<boolean> => {
     setCargandoOpiniones(true);
@@ -451,8 +458,18 @@ export default function App() {
     || (correoContacto.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoContacto.trim()));
 
   const sorprenderme = () => {
-    const indice = Math.floor(Math.random() * RECETAS.length);
-    setRecetaDestacada(RECETAS[indice]);
+    const indice = Math.floor(Math.random() * CATALOGO_COMPLETO.length);
+    setRecetaDestacada(CATALOGO_COMPLETO[indice]);
+    animacionDado.stopAnimation();
+    animacionDado.setValue(0);
+    Animated.timing(animacionDado, {
+      toValue: 1,
+      duration: 850,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) animacionDado.setValue(0);
+    });
   };
 
   const enviarOpinion = async () => {
@@ -610,7 +627,10 @@ export default function App() {
           <View style={styles.encabezadoDestacada}>
             <Text style={styles.etiquetaDestacada}>ANTOJO DEL MOMENTO</Text>
             <TouchableOpacity onPress={sorprenderme} accessibilityRole="button" accessibilityLabel="Elegir otra receta al azar">
-              <Text style={styles.botonAzar}>🎲 Sorpréndeme</Text>
+              <View style={styles.botonAzar}>
+                <Animated.Text style={[styles.dadoSorprendeme, { transform: [{ rotate: rotacionDado }] }]}>🎲</Animated.Text>
+                <Text style={styles.textoSorprendeme}>Sorpréndeme</Text>
+              </View>
             </TouchableOpacity>
           </View>
           <View style={styles.filaDestacada}>
@@ -2415,10 +2435,20 @@ const styles = StyleSheet.create({
   },
 
   botonAzar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    padding: 6,
+  },
+
+  dadoSorprendeme: {
+    fontSize: 19,
+  },
+
+  textoSorprendeme: {
     fontSize: 13,
     fontWeight: '700',
     color: '#246B45',
-    padding: 6,
   },
 
   filaDestacada: {
