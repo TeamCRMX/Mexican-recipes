@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -119,17 +119,17 @@ export default function App() {
   const [mensajeContacto, setMensajeContacto] = useState('');
   const [enviandoContacto, setEnviandoContacto] = useState(false);
   const [estadoContacto, setEstadoContacto] = useState('');
-  const animacionDado = useRef(new Animated.Value(0)).current;
+  const [animacionDado] = useState(() => new Animated.Value(0));
   const rotacionDado = animacionDado.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '720deg'],
   });
 
-  const cargarOpiniones = useCallback(async (): Promise<boolean> => {
+  const cargarOpiniones = useCallback(async (receta: Receta | null = recetaOpinion): Promise<boolean> => {
     setCargandoOpiniones(true);
     try {
-      const query = recetaOpinion
-        ? `?receta=${encodeURIComponent(recetaOpinion.nombre)}`
+      const query = receta
+        ? `?receta=${encodeURIComponent(receta.nombre)}`
         : '';
       const respuesta = await fetchConTiempo(`${getBackendUrl()}/api/opiniones${query}`);
       const datos = await respuesta.json();
@@ -144,10 +144,6 @@ export default function App() {
       setCargandoOpiniones(false);
     }
   }, [recetaOpinion]);
-
-  useEffect(() => {
-    if (pantalla === 'opiniones') void cargarOpiniones();
-  }, [pantalla, cargarOpiniones]);
 
   const volver = useCallback(() => {
     if (pantalla === 'detalle') {
@@ -364,6 +360,7 @@ export default function App() {
     setCalificacionOpinion(5);
     setEstadoOpinion('');
     setPantalla('opiniones');
+    void cargarOpiniones(receta);
   };
 
   const abrirContacto = () => {
