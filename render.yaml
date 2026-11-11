@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: mexican-recipes
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run seed && npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: USE_NEON
+        value: "true"
+      - key: DATABASE_URL
+        sync: false
