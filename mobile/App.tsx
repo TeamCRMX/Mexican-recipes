@@ -42,11 +42,6 @@ type Opinion = {
   comentario: string;
   creado_en: string;
 };
-type EntradaHistorialNavegacion = {
-  pantalla: Pantalla;
-  receta: ResultadoReceta | null;
-};
-
 const ICONO_CATEGORIA: Record<CategoriaReceta, string> = {
   Desayuno: '☀️',
   Comida: '🍽️',
@@ -96,7 +91,6 @@ export default function App() {
   >([]);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
-  const [historialRecetas, setHistorialRecetas] = useState<EntradaHistorialNavegacion[]>([]);
   const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
   const [cargando, setCargando] = useState(false);
   const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
@@ -153,17 +147,10 @@ export default function App() {
 
   const volver = useCallback(() => {
     if (pantalla === 'detalle') {
-      if (historialRecetas.length > 0) {
-        const anteriores = [...historialRecetas];
-        const entradaAnterior = anteriores.pop()!;
-        setHistorialRecetas(anteriores);
-        setRecetaSeleccionada(entradaAnterior.receta);
-        setPantalla(entradaAnterior.pantalla);
-        setPasosCompletados([]);
-        return true;
-      }
       setRecetaSeleccionada(null);
-      setPantalla(pantallaAnterior === 'inicio' ? 'catalogo' : pantallaAnterior);
+      setPasosCompletados([]);
+      setPantallaAnterior('inicio');
+      setPantalla('inicio');
       return true;
     }
 
@@ -175,7 +162,6 @@ export default function App() {
       setPromedioOpiniones(0);
       setEstadoOpinion('');
       setRecetaSeleccionada(null);
-      setHistorialRecetas([]);
       setPantallaAnterior('inicio');
       setPantalla('inicio');
       return true;
@@ -202,7 +188,7 @@ export default function App() {
     }
 
     return false;
-  }, [cargarOpiniones, historialRecetas, pantalla, pantallaAnterior]);
+  }, [pantalla, pantallaAnterior]);
 
   useEffect(() => {
     const suscripcion = BackHandler.addEventListener(
@@ -362,12 +348,7 @@ export default function App() {
   };
 
   const abrirDetalle = (receta: ResultadoReceta) => {
-    const pantallaOrigen = pantalla === 'inicio' ? 'catalogo' : pantalla;
-    setHistorialRecetas((actuales) => [...actuales, {
-      pantalla: pantalla === 'detalle' ? 'detalle' : pantallaOrigen,
-      receta: pantalla === 'detalle' ? recetaSeleccionada : null,
-    }]);
-    if (pantalla !== 'detalle') setPantallaAnterior(pantallaOrigen);
+    setPantallaAnterior('inicio');
     setRecetaSeleccionada(receta);
     setPasosCompletados([]);
     setPantalla('detalle');
@@ -414,8 +395,7 @@ export default function App() {
 
   const abrirRecetaDesdeOpiniones = () => {
     if (!recetaOpinion) return;
-    setPantallaAnterior('opiniones');
-    setHistorialRecetas([]);
+    setPantallaAnterior('inicio');
     setRecetaSeleccionada(crearResultadoLocal(recetaOpinion));
     setPasosCompletados([]);
     setPantalla('detalle');
@@ -1366,9 +1346,9 @@ export default function App() {
       return (
         <View style={styles.contenedorPantalla}>
           {botonRegreso('Volver a recetas', () => {
-            setHistorialRecetas([]);
             setRecetaSeleccionada(null);
-            setPantalla('catalogo');
+            setPantallaAnterior('inicio');
+            setPantalla('inicio');
           })}
 
           <Text style={styles.textoMensajeVacio}>
@@ -1382,9 +1362,10 @@ export default function App() {
 
     return (
       <View style={styles.contenedorPantalla}>
-        {botonRegreso('Volver a recetas', volver)}
+        {botonRegreso('Volver a inicio', volver)}
 
         <ScrollView
+          key={`detalle-receta-${recetaSeleccionada.id}`}
           style={styles.listaDesplazable}
           contentContainerStyle={styles.contenidoDetalle}
           showsVerticalScrollIndicator={false}
@@ -1395,6 +1376,27 @@ export default function App() {
               <Text style={styles.categoriaDetalle}>{ICONO_CATEGORIA[recetaActual.categoria]} {recetaActual.categoria}</Text>
               <Text style={styles.tituloDetalle}>{recetaActual.nombre}</Text>
             </View>
+          </View>
+
+          <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Necesitas antes de cocinar</Text>
+            <Text style={styles.textoSecundario}>Revisa estos utensilios y equipos antes de empezar; así sabrás desde el inicio si tienes todo a la mano.</Text>
+            <Text style={styles.subtituloListaRecursos}>Equipos y dispositivos</Text>
+            {recetaActual.equipos.length > 0 ? (
+              recetaActual.equipos.map((equipo) => (
+                <Text key={equipo} style={styles.elementoLista}>• {equipo}</Text>
+              ))
+            ) : (
+              <Text style={styles.textoSecundario}>No requiere equipos eléctricos específicos.</Text>
+            )}
+            <Text style={styles.subtituloListaRecursos}>Utensilios</Text>
+            {recetaActual.utensilios.length > 0 ? (
+              recetaActual.utensilios.map((utensilio) => (
+                <Text key={utensilio} style={styles.elementoLista}>• {utensilio}</Text>
+              ))
+            ) : (
+              <Text style={styles.textoSecundario}>No hay utensilios adicionales registrados.</Text>
+            )}
           </View>
 
           <Text style={styles.descripcionDetalle}>
@@ -1431,27 +1433,6 @@ export default function App() {
                 {ingredientesSeleccionados.length ? `${recetaActual.porcentaje}%` : 'Sin comparar'}
               </Text>
             </View>
-          </View>
-
-          <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>Revisa antes de comenzar</Text>
-            <Text style={styles.textoSecundario}>Ten listos estos utensilios y equipos antes de preparar la receta.</Text>
-            <Text style={styles.subtituloListaRecursos}>Equipos y dispositivos</Text>
-            {recetaActual.equipos.length > 0 ? (
-              recetaActual.equipos.map((equipo) => (
-                <Text key={equipo} style={styles.elementoLista}>• {equipo}</Text>
-              ))
-            ) : (
-              <Text style={styles.textoSecundario}>No requiere equipos eléctricos específicos.</Text>
-            )}
-            <Text style={styles.subtituloListaRecursos}>Utensilios</Text>
-            {recetaActual.utensilios.length > 0 ? (
-              recetaActual.utensilios.map((utensilio) => (
-                <Text key={utensilio} style={styles.elementoLista}>• {utensilio}</Text>
-              ))
-            ) : (
-              <Text style={styles.textoSecundario}>No hay utensilios adicionales registrados.</Text>
-            )}
           </View>
 
           {recetaActual.categoria !== 'Bebidas' && obtenerBebidasParaAcompanamiento(recetaActual.categoria).length > 0 ? (
@@ -1583,7 +1564,6 @@ export default function App() {
           <TouchableOpacity
             style={styles.botonPrincipal}
             onPress={() => {
-              setHistorialRecetas([]);
               setRecetaSeleccionada(null);
               setPantalla('ingredientes');
             }}
