@@ -1159,7 +1159,13 @@ export default function App() {
     return (
       <View style={styles.contenedorPantalla}>
         {botonRegreso('Volver', volver)}
-        <ScrollView style={styles.listaDesplazable} contentContainerStyle={styles.contenidoDetalle} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView
+          key={recetaOpinionNombre ? `opiniones-receta-${recetaOpinionNombre}` : `opiniones-${seccionOpiniones}`}
+          style={styles.listaDesplazable}
+          contentContainerStyle={styles.contenidoDetalle}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {encabezado(
             recetaOpinionNombre ? `Opiniones: ${recetaOpinionNombre}` : 'Opiniones de la comunidad',
             recetaOpinionNombre ? 'Lee comentarios y comparte tu calificación para esta receta.' : 'Consulta por separado las opiniones generales y las de cada receta.',
@@ -1195,24 +1201,13 @@ export default function App() {
                 </TouchableOpacity>
               ))}
             </View>
-          ) : (
-            <TouchableOpacity style={styles.botonListaOpiniones} onPress={() => abrirListaOpiniones('recetas')} accessibilityRole="button">
-              <Text style={styles.textoBotonListaOpiniones}>← Ver todas las opiniones de recetas</Text>
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.resumenOpiniones}>
-            <Text style={styles.etiquetaFormulario}>Elige tu calificación</Text>
-            {selectorEstrellas('Primera calificación')}
-            <Text style={styles.promedioOpiniones}>Tu selección: {calificacionOpinion} de 5</Text>
-            <Text style={styles.textoSecundario}>
-              {promedioVisible ? `Promedio visible: ${promedioVisible.toFixed(1)} de 5 · ` : ''}
-              {opinionesVisibles.length} {opinionesVisibles.length === 1 ? 'opinión' : 'opiniones'}
-            </Text>
-          </View>
+          ) : null}
 
           <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Comparte tu experiencia</Text>
+            <Text style={styles.etiquetaFormulario}>Elige tu calificación</Text>
+            {selectorEstrellas('Primera calificación')}
+            <Text style={styles.promedioOpiniones}>Tu selección: {calificacionOpinion} de 5</Text>
             <TextInput
               value={nombreOpinion}
               onChangeText={setNombreOpinion}
@@ -1252,6 +1247,10 @@ export default function App() {
           <Text style={styles.tituloSeccionLista}>
             {recetaOpinionNombre ? `Opiniones de ${recetaOpinionNombre}` : seccionOpiniones === 'generales' ? 'Opiniones generales de la aplicación' : 'Opiniones vinculadas a recetas'}
           </Text>
+          <Text style={styles.textoSecundario}>
+            {promedioVisible ? `Promedio: ${promedioVisible.toFixed(1)} de 5 · ` : ''}
+            {opinionesVisibles.length} {opinionesVisibles.length === 1 ? 'opinión' : 'opiniones'}
+          </Text>
           {cargandoOpiniones ? (
             <ActivityIndicator color="#267348" style={styles.cargandoOpiniones} />
           ) : opinionesVisibles.length ? opinionesVisibles.map((opinion) => (
@@ -1274,6 +1273,11 @@ export default function App() {
           )) : (
             <Text style={styles.textoSinOpiniones}>{estadoOpinion || 'Todavía no hay opiniones en esta sección. ¡Puedes iniciar la conversación!'}</Text>
           )}
+          {recetaOpinionNombre ? (
+            <TouchableOpacity style={styles.botonListaOpiniones} onPress={() => abrirListaOpiniones('recetas')} accessibilityRole="button">
+              <Text style={styles.textoBotonListaOpiniones}>Ver todas las opiniones de recetas →</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </View>
     );
