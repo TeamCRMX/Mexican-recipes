@@ -1,4 +1,5 @@
 import { RECETAS_EXTRA } from './recetas-extra';
+import { RECETAS_EXPANSION } from './recetas-expansion';
 
 export type IngredienteReceta = {
   nombre: string;
@@ -1020,7 +1021,7 @@ const RECETAS_BASE: Receta[] = [
   }),
 ];
 
-export const RECETAS: Receta[] = [...RECETAS_BASE, ...RECETAS_EXTRA];
+export const RECETAS: Receta[] = [...RECETAS_BASE, ...RECETAS_EXTRA, ...RECETAS_EXPANSION];
 
 export const INGREDIENTES_DISPONIBLES = Array.from(
   new Map(RECETAS.flatMap((item) => item.ingredientes).map((item) => [item.nombre, { nombre: item.nombre,
