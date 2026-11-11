@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -83,6 +83,7 @@ type ResultadoReceta = Receta & {
 export default function App() {
   const { width } = useWindowDimensions();
   const pantallaAncha = width >= 600;
+  const detalleScrollRef = useRef<ScrollView>(null);
 
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [pantallaAnterior, setPantallaAnterior] = useState<Pantalla>('inicio');
@@ -198,6 +199,15 @@ export default function App() {
 
     return () => suscripcion.remove();
   }, [volver]);
+
+  useLayoutEffect(() => {
+    if (pantalla !== 'detalle') return;
+
+    const frame = requestAnimationFrame(() => {
+      detalleScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [pantalla, recetaSeleccionada?.id]);
 
   const alternarIngrediente = (ingrediente: string) => {
     setIngredientesSeleccionados((actuales) => {
@@ -1369,6 +1379,7 @@ export default function App() {
         {botonRegreso('Volver a inicio', volver)}
 
         <ScrollView
+          ref={detalleScrollRef}
           key={`detalle-receta-${recetaSeleccionada.id}`}
           style={styles.listaDesplazable}
           contentContainerStyle={styles.contenidoDetalle}
