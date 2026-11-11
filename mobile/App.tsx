@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  FlatList,
   Linking,
   ScrollView,
   StyleSheet,
@@ -686,117 +687,128 @@ export default function App() {
     <View style={styles.contenedorPantalla}>
       {botonRegreso('Inicio', () => setPantalla('inicio'))}
       {encabezado('Explorar recetas', 'Combina filtros por categoría, ingrediente, dificultad y tiempo.')}
-      <ScrollView style={styles.listaDesplazable} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <TextInput
-          value={busquedaCatalogo}
-          onChangeText={setBusquedaCatalogo}
-          placeholder="Busca también en preparación, equipo y utensilios"
-          placeholderTextColor="#8B958B"
-          style={styles.campoBusqueda}
-          accessibilityLabel="Buscar en todos los datos de las recetas"
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-        />
-        <Text style={styles.ayudaFiltro}>La búsqueda general revisa nombres, ingredientes, preparación, utensilios y equipo.</Text>
+      <FlatList
+        style={styles.listaDesplazable}
+        data={recetasFiltradas}
+        keyExtractor={(receta) => String(receta.id)}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        ListHeaderComponent={(
+          <View>
+            <TextInput
+              value={busquedaCatalogo}
+              onChangeText={setBusquedaCatalogo}
+              placeholder="Busca también en preparación, equipo y utensilios"
+              placeholderTextColor="#8B958B"
+              style={styles.campoBusqueda}
+              accessibilityLabel="Buscar en todos los datos de las recetas"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            <Text style={styles.ayudaFiltro}>La búsqueda general revisa nombres, ingredientes, preparación, utensilios y equipo.</Text>
 
-        <Text style={styles.tituloFiltro}>Categoría</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsFila}>
-          {(['Todas', ...CATEGORIAS_RECETA] as const).map((categoria) => (
-            <TouchableOpacity
-              key={categoria}
-              onPress={() => setCategoriaFiltro(categoria)}
-              style={[styles.chipFiltro, categoriaFiltro === categoria && styles.chipFiltroActivo]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: categoriaFiltro === categoria }}
-            >
-              <Text style={[styles.textoChipFiltro, categoriaFiltro === categoria && styles.textoChipFiltroActivo]}>
-                {categoria === 'Todas' ? '🍽️ Todas' : `${ICONO_CATEGORIA[categoria]} ${categoria}`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            <Text style={styles.tituloFiltro}>Categoría</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsFila}>
+              {(['Todas', ...CATEGORIAS_RECETA] as const).map((categoria) => (
+                <TouchableOpacity
+                  key={categoria}
+                  onPress={() => setCategoriaFiltro(categoria)}
+                  style={[styles.chipFiltro, categoriaFiltro === categoria && styles.chipFiltroActivo]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: categoriaFiltro === categoria }}
+                >
+                  <Text style={[styles.textoChipFiltro, categoriaFiltro === categoria && styles.textoChipFiltroActivo]}>
+                    {categoria === 'Todas' ? '🍽️ Todas' : `${ICONO_CATEGORIA[categoria]} ${categoria}`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-        <Text style={styles.tituloFiltro}>Ingrediente</Text>
-        <TextInput
-          value={ingredienteFiltro}
-          onChangeText={setIngredienteFiltro}
-          placeholder="Ej. aguacate, frijol, elote…"
-          placeholderTextColor="#8B958B"
-          style={styles.campoBusqueda}
-          accessibilityLabel="Filtrar recetas por ingrediente"
-          clearButtonMode="while-editing"
-        />
+            <Text style={styles.tituloFiltro}>Ingrediente</Text>
+            <TextInput
+              value={ingredienteFiltro}
+              onChangeText={setIngredienteFiltro}
+              placeholder="Ej. aguacate, frijol, elote…"
+              placeholderTextColor="#8B958B"
+              style={styles.campoBusqueda}
+              accessibilityLabel="Filtrar recetas por ingrediente"
+              clearButtonMode="while-editing"
+            />
 
-        <Text style={styles.tituloFiltro}>Dificultad</Text>
-        <View style={styles.chipsAjustables}>
-          {(['Todas', 'Fácil', 'Media', 'Avanzada'] as const).map((dificultad) => (
-            <TouchableOpacity
-              key={dificultad}
-              onPress={() => setDificultadFiltro(dificultad)}
-              style={[styles.chipFiltro, dificultadFiltro === dificultad && styles.chipFiltroActivo]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: dificultadFiltro === dificultad }}
-            >
-              <Text style={[styles.textoChipFiltro, dificultadFiltro === dificultad && styles.textoChipFiltroActivo]}>{dificultad}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            <Text style={styles.tituloFiltro}>Dificultad</Text>
+            <View style={styles.chipsAjustables}>
+              {(['Todas', 'Fácil', 'Media', 'Avanzada'] as const).map((dificultad) => (
+                <TouchableOpacity
+                  key={dificultad}
+                  onPress={() => setDificultadFiltro(dificultad)}
+                  style={[styles.chipFiltro, dificultadFiltro === dificultad && styles.chipFiltroActivo]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: dificultadFiltro === dificultad }}
+                >
+                  <Text style={[styles.textoChipFiltro, dificultadFiltro === dificultad && styles.textoChipFiltroActivo]}>{dificultad}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <Text style={styles.tituloFiltro}>Tiempo máximo</Text>
-        <View style={styles.chipsAjustables}>
-          {[null, 20, 30, 45, 60, 90, 120].map((minutos) => (
-            <TouchableOpacity
-              key={minutos ?? 'cualquiera'}
-              onPress={() => setTiempoFiltro(minutos)}
-              style={[styles.chipFiltro, tiempoFiltro === minutos && styles.chipFiltroActivo]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: tiempoFiltro === minutos }}
-            >
-              <Text style={[styles.textoChipFiltro, tiempoFiltro === minutos && styles.textoChipFiltroActivo]}>{minutos ? `≤ ${minutos} min` : 'Cualquiera'}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            <Text style={styles.tituloFiltro}>Tiempo máximo</Text>
+            <View style={styles.chipsAjustables}>
+              {[null, 20, 30, 45, 60, 90, 120].map((minutos) => (
+                <TouchableOpacity
+                  key={minutos ?? 'cualquiera'}
+                  onPress={() => setTiempoFiltro(minutos)}
+                  style={[styles.chipFiltro, tiempoFiltro === minutos && styles.chipFiltroActivo]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: tiempoFiltro === minutos }}
+                >
+                  <Text style={[styles.textoChipFiltro, tiempoFiltro === minutos && styles.textoChipFiltroActivo]}>{minutos ? `≤ ${minutos} min` : 'Cualquiera'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <View style={styles.filaOrdenCatalogo}>
-          <Text style={styles.tituloFiltro}>Ordenar</Text>
-          <View style={styles.chipsAjustables}>
-            {(['Recomendadas', 'Más rápidas', 'A-Z'] as const).map((orden) => (
-              <TouchableOpacity
-                key={orden}
-                onPress={() => setOrdenCatalogo(orden)}
-                style={[styles.chipFiltro, ordenCatalogo === orden && styles.chipFiltroActivo]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: ordenCatalogo === orden }}
-              >
-                <Text style={[styles.textoChipFiltro, ordenCatalogo === orden && styles.textoChipFiltroActivo]}>{orden}</Text>
+            <View style={styles.filaOrdenCatalogo}>
+              <Text style={styles.tituloFiltro}>Ordenar</Text>
+              <View style={styles.chipsAjustables}>
+                {(['Recomendadas', 'Más rápidas', 'A-Z'] as const).map((orden) => (
+                  <TouchableOpacity
+                    key={orden}
+                    onPress={() => setOrdenCatalogo(orden)}
+                    style={[styles.chipFiltro, ordenCatalogo === orden && styles.chipFiltroActivo]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: ordenCatalogo === orden }}
+                  >
+                    <Text style={[styles.textoChipFiltro, ordenCatalogo === orden && styles.textoChipFiltroActivo]}>{orden}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filaConteoCatalogo}>
+              <Text style={styles.textoConteoCatalogo}>{recetasFiltradas.length} de {CATALOGO_COMPLETO.length} recetas</Text>
+              <TouchableOpacity onPress={() => {
+                setBusquedaCatalogo('');
+                setIngredienteFiltro('');
+                setCategoriaFiltro('Todas');
+                setDificultadFiltro('Todas');
+                setTiempoFiltro(null);
+                setOrdenCatalogo('Recomendadas');
+              }} accessibilityRole="button">
+                <Text style={styles.textoLimpiarFiltros}>Limpiar filtros</Text>
               </TouchableOpacity>
-            ))}
+            </View>
           </View>
-        </View>
-
-        <View style={styles.filaConteoCatalogo}>
-          <Text style={styles.textoConteoCatalogo}>{recetasFiltradas.length} de {CATALOGO_COMPLETO.length} recetas</Text>
-          <TouchableOpacity onPress={() => {
-            setBusquedaCatalogo('');
-            setIngredienteFiltro('');
-            setCategoriaFiltro('Todas');
-            setDificultadFiltro('Todas');
-            setTiempoFiltro(null);
-            setOrdenCatalogo('Recomendadas');
-          }} accessibilityRole="button">
-            <Text style={styles.textoLimpiarFiltros}>Limpiar filtros</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recetasFiltradas.length === 0 ? (
+        )}
+        ListEmptyComponent={(
           <View style={styles.mensajeVacio}>
             <Text style={styles.emojiVacio}>🔎</Text>
             <Text style={styles.tituloMensajeVacio}>No encontramos recetas</Text>
             <Text style={styles.textoMensajeVacio}>Prueba otro ingrediente o quita algún filtro.</Text>
           </View>
-        ) : recetasFiltradas.map((receta) => (
+        )}
+        renderItem={({ item: receta }) => (
           <TouchableOpacity
-            key={receta.id}
             style={styles.tarjetaCatalogo}
             onPress={() => abrirDetalle(crearResultadoLocal(receta))}
             activeOpacity={0.78}
@@ -815,8 +827,8 @@ export default function App() {
               <Text style={styles.ingredientesTarjetaCatalogo} numberOfLines={1}>{receta.ingredientes.map((item) => item.nombre).join(' · ')}</Text>
             </View>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 
@@ -1011,13 +1023,17 @@ export default function App() {
             </TouchableOpacity>
           </View>
         ) : (
-          <ScrollView
+          <FlatList
             style={styles.listaDesplazable}
             contentContainerStyle={styles.listaResultados}
+            data={resultados}
+            keyExtractor={(receta) => String(receta.id)}
             showsVerticalScrollIndicator={false}
-          >
-            {resultados.map((receta) => (
-              <View key={receta.id} style={styles.tarjetaReceta}>
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={7}
+            renderItem={({ item: receta }) => (
+              <View style={styles.tarjetaReceta}>
                 <View style={styles.filaTituloReceta}>
                   <View style={styles.infoTituloReceta}>
                     <Text style={styles.nombreReceta}>{receta.emoji}  {receta.nombre}</Text>
@@ -1081,8 +1097,9 @@ export default function App() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            ))}
-          </ScrollView>
+            )}
+          >
+          </FlatList>
         )}
       </View>
     );
