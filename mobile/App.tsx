@@ -23,7 +23,7 @@ import {
   type CategoriaReceta,
   type Receta,
 } from './src/data/recetas';
-import { BEBIDAS, obtenerBebidasParaAcompanamiento } from './src/data/bebidas';
+import { BEBIDAS } from './src/data/bebidas';
 
 const CATALOGO_COMPLETO: Receta[] = [...RECETAS, ...BEBIDAS];
 const INGREDIENTES_CATALOGO = Array.from(
@@ -1424,30 +1424,6 @@ export default function App() {
             </View>
           </View>
 
-          {recetaActual.categoria !== 'Bebidas' && obtenerBebidasParaAcompanamiento(recetaActual.categoria).length > 0 ? (
-            <View style={styles.seccionDetalle}>
-              <Text style={styles.tituloSeccion}>Bebidas para acompañar</Text>
-              <Text style={styles.textoSecundario}>Toca una opción para ver sus ingredientes y preparación completa.</Text>
-              {obtenerBebidasParaAcompanamiento(recetaActual.categoria).map((bebida) => (
-                <TouchableOpacity
-                  key={bebida.id}
-                  style={styles.filaBebidaAcompanamiento}
-                  onPress={() => abrirDetalle(crearResultadoLocal(bebida))}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Ver receta de bebida: ${bebida.nombre}`}
-                >
-                  <Text style={styles.emojiBebidaAcompanamiento}>{bebida.emoji}</Text>
-                  <View style={styles.detalleBebidaAcompanamiento}>
-                    <Text style={styles.nombreBebidaAcompanamiento}>{bebida.nombre}  ›</Text>
-                    <Text style={styles.textoBebidaAcompanamiento}>{bebida.descripcion}</Text>
-                    {bebida.esAlcoholica ? <Text style={styles.notaAlcoholica}>Contiene alcohol · solo para personas adultas</Text> : null}
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ) : null}
-
           {recetaActual.esAlcoholica ? (
             <View style={styles.avisoAlcoholico}>
               <Text style={styles.textoAvisoAlcoholico}>Bebida con alcohol. Solo para mayores de edad; no conduzcas después de consumirla.</Text>
@@ -2283,37 +2259,6 @@ const styles = StyleSheet.create({
     color: '#58645A',
     marginTop: 10,
     marginBottom: 3,
-  },
-
-  filaBebidaAcompanamiento: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#EDF1E9',
-    paddingTop: 10,
-    marginTop: 9,
-  },
-
-  emojiBebidaAcompanamiento: {
-    fontSize: 23,
-  },
-
-  detalleBebidaAcompanamiento: {
-    flex: 1,
-  },
-
-  nombreBebidaAcompanamiento: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#35473A',
-    marginBottom: 2,
-  },
-
-  textoBebidaAcompanamiento: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#58645A',
   },
 
   notaAlcoholica: {
