@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -31,6 +31,10 @@ const INGREDIENTES_CATALOGO = Array.from(
       .map((ingrediente) => [ingrediente.nombre, { nombre: ingrediente.nombre, categoria: ingrediente.categoria }]),
   ).values(),
 ).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
+const normalizarTexto = (valor: string) => valor
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase('es-MX');
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
@@ -83,7 +87,7 @@ type ResultadoReceta = Receta & {
 export default function App() {
   const { width } = useWindowDimensions();
   const pantallaAncha = width >= 600;
-  const detalleScrollRef = useRef<ScrollView>(null);
+  const detalleScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [pantallaAnterior, setPantallaAnterior] = useState<Pantalla>('inicio');
@@ -224,7 +228,7 @@ export default function App() {
     setBusquedaIngrediente('');
   };
 
-  const crearResultadoLocal = (receta: Receta): ResultadoReceta => {
+  const crearResultadoLocal = useCallback((receta: Receta): ResultadoReceta => {
     const disponibles = receta.ingredientes
       .filter((ingrediente) => ingredientesSeleccionados.includes(ingrediente.nombre))
       .map((ingrediente) => ingrediente.nombre);
@@ -243,7 +247,7 @@ export default function App() {
       disponibles,
       faltantes,
     };
-  };
+  }, [ingredientesSeleccionados]);
 
   const buscarRecetas = async () => {
     if (ingredientesSeleccionados.length === 0) {
@@ -450,54 +454,66 @@ export default function App() {
     </View>
   );
 
-  const ingredientesFiltrados = INGREDIENTES_CATALOGO.filter((ingrediente) =>
-    `${ingrediente.nombre} ${ingrediente.categoria}`
-      .toLocaleLowerCase('es-MX')
-      .includes(busquedaIngrediente.trim().toLocaleLowerCase('es-MX')),
-  );
+  const ingredientesFiltrados = useMemo(() => {
+    if (pantalla !== 'ingredientes') return [];
+    const busqueda = busquedaIngrediente.trim().toLocaleLowerCase('es-MX');
+    return INGREDIENTES_CATALOGO.filter((ingrediente) =>
+      `${ingrediente.nombre} ${ingrediente.categoria}`
+        .toLocaleLowerCase('es-MX')
+        .includes(busqueda),
+    );
+  }, [busquedaIngrediente, pantalla]);
 
-  const vistaPreviaRecetas = ingredientesSeleccionados.length === 0
-    ? []
-    : CATALOGO_COMPLETO.map(crearResultadoLocal)
+  const vistaPreviaRecetas = useMemo(() => {
+    if (pantalla !== 'ingredientes' || ingredientesSeleccionados.length === 0) return [];
+    return CATALOGO_COMPLETO.map(crearResultadoLocal)
       .filter((resultado) => resultado.porcentaje >= 50)
       .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+  }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
 
-  const normalizarTexto = (valor: string) => valor
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es-MX');
+  const busquedaCatalogoNormalizada = normalizarTexto(busquedaCatalogo.trim());
+  const ingredienteFiltroNormalizado = normalizarTexto(ingredienteFiltro.trim());
+  const recetasFiltradas = useMemo(() => {
+    if (pantalla !== 'catalogo') return [];
+    return CATALOGO_COMPLETO.filter((receta) => {
+      const campos = normalizarTexto([
+        receta.nombre,
+        receta.descripcion,
+        receta.categoria,
+        receta.dificultad,
+        `${receta.tiempoMin} minutos`,
+        `${receta.porciones} porciones`,
+        receta.ingredientes.map((item) => `${item.nombre} ${item.cantidad} ${item.categoria}`).join(' '),
+        receta.preparacion.join(' '),
+        receta.utensilios.join(' '),
+        receta.equipos.join(' '),
+      ].join(' '));
+      const tieneIngrediente = !ingredienteFiltroNormalizado || receta.ingredientes.some((item) =>
+        normalizarTexto(item.nombre).includes(ingredienteFiltroNormalizado));
 
-  const recetasFiltradas = CATALOGO_COMPLETO.filter((receta) => {
-    const campos = normalizarTexto([
-      receta.nombre,
-      receta.descripcion,
-      receta.categoria,
-      receta.dificultad,
-      `${receta.tiempoMin} minutos`,
-      `${receta.porciones} porciones`,
-      receta.ingredientes.map((item) => `${item.nombre} ${item.cantidad} ${item.categoria}`).join(' '),
-      receta.preparacion.join(' '),
-      receta.utensilios.join(' '),
-      receta.equipos.join(' '),
-    ].join(' '));
-    const busqueda = normalizarTexto(busquedaCatalogo.trim());
-    const ingrediente = normalizarTexto(ingredienteFiltro.trim());
-    const tieneIngrediente = !ingrediente || receta.ingredientes.some((item) =>
-      normalizarTexto(item.nombre).includes(ingrediente));
-
-    return (categoriaFiltro === 'Todas' || receta.categoria === categoriaFiltro)
-      && (dificultadFiltro === 'Todas' || receta.dificultad === dificultadFiltro)
-      && (tiempoFiltro === null || receta.tiempoMin <= tiempoFiltro)
-      && (!busqueda || campos.includes(busqueda))
-      && tieneIngrediente;
-  }).sort((a, b) => {
-    if (ordenCatalogo === 'Más rápidas') return a.tiempoMin - b.tiempoMin || a.nombre.localeCompare(b.nombre, 'es-MX');
-    if (ordenCatalogo === 'A-Z') return a.nombre.localeCompare(b.nombre, 'es-MX');
-    const coincidencia = (receta: Receta) => ingredientesSeleccionados.length
-      ? receta.ingredientes.filter((item) => ingredientesSeleccionados.includes(item.nombre)).length / receta.ingredientes.length
-      : 0;
-    return coincidencia(b) - coincidencia(a) || a.nombre.localeCompare(b.nombre, 'es-MX');
-  });
+      return (categoriaFiltro === 'Todas' || receta.categoria === categoriaFiltro)
+        && (dificultadFiltro === 'Todas' || receta.dificultad === dificultadFiltro)
+        && (tiempoFiltro === null || receta.tiempoMin <= tiempoFiltro)
+        && (!busquedaCatalogoNormalizada || campos.includes(busquedaCatalogoNormalizada))
+        && tieneIngrediente;
+    }).sort((a, b) => {
+      if (ordenCatalogo === 'Más rápidas') return a.tiempoMin - b.tiempoMin || a.nombre.localeCompare(b.nombre, 'es-MX');
+      if (ordenCatalogo === 'A-Z') return a.nombre.localeCompare(b.nombre, 'es-MX');
+      const coincidencia = (receta: Receta) => ingredientesSeleccionados.length
+        ? receta.ingredientes.filter((item) => ingredientesSeleccionados.includes(item.nombre)).length / receta.ingredientes.length
+        : 0;
+      return coincidencia(b) - coincidencia(a) || a.nombre.localeCompare(b.nombre, 'es-MX');
+    });
+  }, [
+    busquedaCatalogoNormalizada,
+    categoriaFiltro,
+    dificultadFiltro,
+    ingredienteFiltroNormalizado,
+    ingredientesSeleccionados,
+    ordenCatalogo,
+    pantalla,
+    tiempoFiltro,
+  ]);
 
   const correoContactoValido = !correoContacto.trim()
     || (correoContacto.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoContacto.trim()));
