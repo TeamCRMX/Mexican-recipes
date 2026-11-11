@@ -167,18 +167,21 @@ export default function App() {
       return true;
     }
 
-    if (pantalla === 'opiniones' && pantallaAnterior === 'opiniones') {
+    if (pantalla === 'opiniones') {
       setRecetaOpinion(null);
       setRecetaOpinionNombre(null);
-      setSeccionOpiniones('recetas');
+      setSeccionOpiniones('generales');
       setOpiniones([]);
       setPromedioOpiniones(0);
       setEstadoOpinion('');
-      void cargarOpiniones(null);
+      setRecetaSeleccionada(null);
+      setHistorialRecetas([]);
+      setPantallaAnterior('inicio');
+      setPantalla('inicio');
       return true;
     }
 
-    if (pantalla === 'opiniones' || pantalla === 'contacto') {
+    if (pantalla === 'contacto') {
       setPantalla(pantallaAnterior);
       return true;
     }
@@ -407,6 +410,15 @@ export default function App() {
     const receta = CATALOGO_COMPLETO.find((item) =>
       item.nombre.toLocaleLowerCase('es-MX') === opinion.nombre_receta?.toLocaleLowerCase('es-MX')) ?? null;
     abrirOpiniones(receta, opinion.nombre_receta);
+  };
+
+  const abrirRecetaDesdeOpiniones = () => {
+    if (!recetaOpinion) return;
+    setPantallaAnterior('opiniones');
+    setHistorialRecetas([]);
+    setRecetaSeleccionada(crearResultadoLocal(recetaOpinion));
+    setPasosCompletados([]);
+    setPantalla('detalle');
   };
 
   const abrirContacto = () => {
@@ -1172,6 +1184,21 @@ export default function App() {
             recetaOpinionNombre ? `Opiniones: ${recetaOpinionNombre}` : 'Opiniones de la comunidad',
             recetaOpinionNombre ? 'Lee comentarios y comparte tu calificación para esta receta.' : 'Consulta por separado las opiniones generales y las de cada receta.',
           )}
+          {recetaOpinion ? (
+            <View style={styles.seccionDetalle}>
+              <Text style={styles.tituloSeccion}>{recetaOpinion.emoji}  {recetaOpinion.nombre}</Text>
+              <Text style={styles.textoSecundario}>{recetaOpinion.descripcion}</Text>
+              <TouchableOpacity
+                style={styles.botonDetalle}
+                onPress={abrirRecetaDesdeOpiniones}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Ver receta completa de ${recetaOpinion.nombre}`}
+              >
+                <Text style={styles.textoBotonDetalle}>Ver receta completa y preparación →</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {!recetaOpinionNombre ? (
             <View style={styles.tabsOpiniones}>
               {(['generales', 'recetas'] as const).map((seccion) => (
