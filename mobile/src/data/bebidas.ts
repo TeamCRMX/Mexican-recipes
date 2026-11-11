@@ -1,4 +1,5 @@
 import type { CategoriaReceta, Receta } from './recetas';
+import { BEBIDAS_EXPANSION } from './bebidas-expansion';
 
 const CATEGORIAS_DE_PLATILLO: CategoriaReceta[] = [
   'Desayuno',
@@ -10,7 +11,7 @@ const CATEGORIAS_DE_PLATILLO: CategoriaReceta[] = [
 ];
 
 /** Bebidas completas: cada una puede abrirse como cualquier otra receta. */
-export const BEBIDAS: Receta[] = [
+const BEBIDAS_BASE: Receta[] = [
   {
     id: 101,
     nombre: 'Agua natural con limón',
@@ -563,6 +564,8 @@ export const BEBIDAS: Receta[] = [
     fuenteUrl: 'https://laroussecocina.mx/Categoria/bebidas/',
   },
 ];
+
+export const BEBIDAS: Receta[] = [...BEBIDAS_BASE, ...BEBIDAS_EXPANSION];
 
 export const obtenerBebidasParaAcompanamiento = (categoria: CategoriaReceta) =>
   BEBIDAS.filter((bebida) => bebida.acompanamientoPara?.includes(categoria));
