@@ -36,6 +36,7 @@ const normalizarTexto = (valor: string) => valor
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
   .toLocaleLowerCase('es-MX');
+const TEXTO_BUSQUEDA_CACHE = new WeakMap<Receta, string>();
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
@@ -421,34 +422,50 @@ export default function App() {
   const ingredienteFiltroNormalizado = normalizarTexto(ingredienteFiltro.trim());
   const recetasFiltradas = useMemo(() => {
     if (pantalla !== 'catalogo') return [];
-    return CATALOGO_COMPLETO.filter((receta) => {
-      const campos = normalizarTexto([
-        receta.nombre,
-        receta.descripcion,
-        receta.categoria,
-        receta.dificultad,
-        `${receta.tiempoMin} minutos`,
-        `${receta.porciones} porciones`,
-        receta.ingredientes.map((item) => `${item.nombre} ${item.cantidad} ${item.categoria}`).join(' '),
-        receta.preparacion.join(' '),
-        receta.utensilios.join(' '),
-        receta.equipos.join(' '),
-      ].join(' '));
-      const tieneIngrediente = !ingredienteFiltroNormalizado || receta.ingredientes.some((item) =>
-        normalizarTexto(item.nombre).includes(ingredienteFiltroNormalizado));
+    const candidatas = CATALOGO_COMPLETO.filter((receta) => {
+      if (categoriaFiltro !== 'Todas' && receta.categoria !== categoriaFiltro) return false;
+      if (dificultadFiltro !== 'Todas' && receta.dificultad !== dificultadFiltro) return false;
+      if (tiempoFiltro !== null && receta.tiempoMin > tiempoFiltro) return false;
+      if (ingredienteFiltroNormalizado && !receta.ingredientes.some((item) =>
+        normalizarTexto(item.nombre).includes(ingredienteFiltroNormalizado))) return false;
+      if (!busquedaCatalogoNormalizada) return true;
 
-      return (categoriaFiltro === 'Todas' || receta.categoria === categoriaFiltro)
-        && (dificultadFiltro === 'Todas' || receta.dificultad === dificultadFiltro)
-        && (tiempoFiltro === null || receta.tiempoMin <= tiempoFiltro)
-        && (!busquedaCatalogoNormalizada || campos.includes(busquedaCatalogoNormalizada))
-        && tieneIngrediente;
-    }).sort((a, b) => {
-      if (ordenCatalogo === 'Más rápidas') return a.tiempoMin - b.tiempoMin || a.nombre.localeCompare(b.nombre, 'es-MX');
-      if (ordenCatalogo === 'A-Z') return a.nombre.localeCompare(b.nombre, 'es-MX');
-      const coincidencia = (receta: Receta) => ingredientesSeleccionados.length
-        ? receta.ingredientes.filter((item) => ingredientesSeleccionados.includes(item.nombre)).length / receta.ingredientes.length
-        : 0;
-      return coincidencia(b) - coincidencia(a) || a.nombre.localeCompare(b.nombre, 'es-MX');
+      let campos = TEXTO_BUSQUEDA_CACHE.get(receta);
+      if (!campos) {
+        campos = normalizarTexto([
+          receta.nombre,
+          receta.descripcion,
+          receta.categoria,
+          receta.dificultad,
+          `${receta.tiempoMin} minutos`,
+          `${receta.porciones} porciones`,
+          receta.ingredientes.map((item) => `${item.nombre} ${item.cantidad} ${item.categoria}`).join(' '),
+          receta.preparacion.join(' '),
+          receta.utensilios.join(' '),
+          receta.equipos.join(' '),
+        ].join(' '));
+        TEXTO_BUSQUEDA_CACHE.set(receta, campos);
+      }
+      return campos.includes(busquedaCatalogoNormalizada);
+    });
+
+    if (ordenCatalogo === 'Más rápidas') {
+      return candidatas.sort((a, b) => a.tiempoMin - b.tiempoMin || a.nombre.localeCompare(b.nombre, 'es-MX'));
+    }
+    if (ordenCatalogo === 'A-Z') {
+      return candidatas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
+    }
+
+    const ingredientesDisponibles = new Set(ingredientesSeleccionados);
+    const coincidencias = new Map(candidatas.map((receta) => [
+      receta,
+      ingredientesDisponibles.size
+        ? receta.ingredientes.filter((item) => ingredientesDisponibles.has(item.nombre)).length / receta.ingredientes.length
+        : 0,
+    ]));
+    return candidatas.sort((a, b) => {
+      return (coincidencias.get(b) ?? 0) - (coincidencias.get(a) ?? 0)
+        || a.nombre.localeCompare(b.nombre, 'es-MX');
     });
   }, [
     busquedaCatalogoNormalizada,
@@ -875,12 +892,18 @@ export default function App() {
         {ingredientesFiltrados.length} ingredientes disponibles · {CATALOGO_COMPLETO.length} recetas mexicanas
       </Text>
 
-      <ScrollView
+      <FlatList
         style={styles.listaDesplazable}
         contentContainerStyle={styles.listaIngredientes}
+        data={ingredientesFiltrados}
+        key={pantallaAncha ? 'ingredientes-anchos' : 'ingredientes-compactos'}
+        keyExtractor={(ingrediente) => ingrediente.nombre}
+        numColumns={pantallaAncha ? 3 : 2}
         showsVerticalScrollIndicator={false}
-      >
-        {ingredientesSeleccionados.length > 0 && (
+        initialNumToRender={pantallaAncha ? 18 : 12}
+        maxToRenderPerBatch={pantallaAncha ? 18 : 12}
+        windowSize={7}
+        ListHeaderComponent={ingredientesSeleccionados.length > 0 ? (
           <View style={styles.vistaPreviaCoincidencias}>
             <Text style={styles.tituloVistaPrevia}>Vista previa de coincidencias</Text>
             <Text style={styles.textoVistaPrevia}>
@@ -914,22 +937,21 @@ export default function App() {
               </Text>
             )}
           </View>
-        )}
-        {ingredientesFiltrados.length === 0 ? (
+        ) : undefined}
+        ListEmptyComponent={(
           <Text style={styles.textoSinIngredientes}>
             No hay ingredientes con ese nombre. Prueba otra búsqueda.
           </Text>
-        ) : ingredientesFiltrados.map((ingrediente) => {
+        )}
+        renderItem={({ item: ingrediente }) => {
           const seleccionado =
             ingredientesSeleccionados.includes(ingrediente.nombre);
 
           return (
             <TouchableOpacity
-              key={ingrediente.nombre}
               onPress={() => alternarIngrediente(ingrediente.nombre)}
               style={[
                 styles.botonIngrediente,
-                pantallaAncha && styles.botonIngredienteAncho,
                 seleccionado && styles.ingredienteSeleccionado,
               ]}
               activeOpacity={0.7}
@@ -948,8 +970,8 @@ export default function App() {
               <Text style={styles.categoriaIngrediente}>{ingrediente.categoria}</Text>
             </TouchableOpacity>
           );
-        })}
-      </ScrollView>
+        }}
+      />
 
       <View style={styles.piePantalla}>
         <TouchableOpacity
@@ -1868,14 +1890,11 @@ const styles = StyleSheet.create({
   },
 
   listaIngredientes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     paddingBottom: 16,
   },
 
   botonIngrediente: {
-    width: '48%',
+    width: '100%',
     minHeight: 66,
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -1885,10 +1904,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D8E1D6',
-  },
-
-  botonIngredienteAncho: {
-    width: '31.5%',
   },
 
   ingredienteSeleccionado: {
