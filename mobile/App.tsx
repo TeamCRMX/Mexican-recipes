@@ -88,6 +88,8 @@ export default function App() {
   const { width } = useWindowDimensions();
   const pantallaAncha = width >= 600;
   const detalleScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const scrollPendienteRecetaRef = useRef<number | null>(null);
+  const solicitudRecomendacionesRef = useRef(0);
 
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [pantallaAnterior, setPantallaAnterior] = useState<Pantalla>('inicio');
@@ -96,8 +98,6 @@ export default function App() {
   >([]);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
-  const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
-  const [cargando, setCargando] = useState(false);
   const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
   const [catalogoLocal, setCatalogoLocal] = useState(false);
   const [busquedaCatalogo, setBusquedaCatalogo] = useState('');
@@ -207,10 +207,16 @@ export default function App() {
   useLayoutEffect(() => {
     if (pantalla !== 'detalle') return;
 
+    let segundoFrame: number | null = null;
     const frame = requestAnimationFrame(() => {
-      detalleScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+      segundoFrame = requestAnimationFrame(() => {
+        detalleScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+      });
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      if (segundoFrame !== null) cancelAnimationFrame(segundoFrame);
+    };
   }, [pantalla, recetaSeleccionada?.id]);
 
   const alternarIngrediente = (ingrediente: string) => {
@@ -258,8 +264,10 @@ export default function App() {
       return;
     }
 
-    setCargando(true);
-    const resultadosLocales = CATALOGO_COMPLETO.map(crearResultadoLocal);
+    const solicitudActual = ++solicitudRecomendacionesRef.current;
+    setCatalogoLocal(true);
+    setPantalla('resultados');
+
     const controlador = new AbortController();
     const temporizador = setTimeout(() => controlador.abort(), 6000);
 
@@ -277,6 +285,7 @@ export default function App() {
       );
 
       const datos = await respuesta.json();
+      if (solicitudActual !== solicitudRecomendacionesRef.current) return;
 
       if (!respuesta.ok) {
         throw new Error(
@@ -284,84 +293,18 @@ export default function App() {
         );
       }
 
-      const recomendacionesServidor = (datos.recomendaciones ?? []).map(
-        (item: {
-          id_receta: number;
-          nombre: string;
-          descripcion: string | null;
-          tiempo_preparacion: number | null;
-          dificultad: string | null;
-          porcentajeCoincidencia: number;
-          preparacion?: string[];
-          utensilios?: string[];
-          equipos?: string[];
-          fuente_url?: string | null;
-          categoria?: string | null;
-          porciones?: number | null;
-          emoji?: string | null;
-          consejo?: string | null;
-        }) => ({ nombre: item.nombre, item }),
-      );
-
-      const recetasServidor = new Map(
-        recomendacionesServidor.map(({ nombre, item }: { nombre: string; item: Record<string, unknown> }) => [
-          nombre.toLocaleLowerCase('es-MX'), item,
-        ]),
-      );
+      const recomendacionesServidor = Array.isArray(datos.recomendaciones) ? datos.recomendaciones : [];
       const catalogoTotal = Number(datos.catalogoTotal ?? recomendacionesServidor.length);
-      const catalogoParcial = catalogoTotal < CATALOGO_COMPLETO.length;
-      const resultados = resultadosLocales.map((local) => {
-        const servidor = recetasServidor.get(local.nombre.toLocaleLowerCase('es-MX')) as
-          | {
-              id_receta: number;
-              porcentajeCoincidencia: number;
-              preparacion?: string[];
-              utensilios?: string[];
-              equipos?: string[];
-              fuente_url?: string | null;
-              categoria?: string | null;
-              porciones?: number | null;
-              emoji?: string | null;
-              consejo?: string | null;
-            }
-          | undefined;
-
-        if (!servidor) return local;
-        return {
-          ...local,
-          id: servidor.id_receta,
-          porcentaje: catalogoParcial
-            ? local.porcentaje
-            : servidor.porcentajeCoincidencia,
-          preparacion: servidor.preparacion?.length ? servidor.preparacion : local.preparacion,
-          utensilios: servidor.utensilios?.length ? servidor.utensilios : local.utensilios,
-          equipos: servidor.equipos?.length ? servidor.equipos : local.equipos,
-          fuenteUrl: servidor.fuente_url ?? local.fuenteUrl,
-          categoria: (servidor.categoria as CategoriaReceta | null) ?? local.categoria,
-          porciones: servidor.porciones ?? local.porciones,
-          emoji: servidor.emoji ?? local.emoji,
-          consejo: servidor.consejo ?? local.consejo,
-        };
-      });
-      const resultadosConCoincidencia = resultados.filter((resultado) => resultado.porcentaje >= 50);
-      resultadosConCoincidencia.sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
-      setCatalogoLocal(catalogoParcial);
-      setResultadosAPI(resultadosConCoincidencia);
-      setPantalla('resultados');
+      setCatalogoLocal(catalogoTotal < CATALOGO_COMPLETO.length);
     } catch {
-      const resultadosConCoincidencia = resultadosLocales
-        .filter((resultado) => resultado.porcentaje >= 50)
-        .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
-      setResultadosAPI(resultadosConCoincidencia);
-      setCatalogoLocal(true);
-      setPantalla('resultados');
+      // Las recomendaciones locales ya están visibles; la sincronización es opcional.
     } finally {
       clearTimeout(temporizador);
-      setCargando(false);
     }
   };
 
   const abrirDetalle = (receta: ResultadoReceta) => {
+    scrollPendienteRecetaRef.current = receta.id;
     setPantallaAnterior('inicio');
     setRecetaSeleccionada(receta);
     setPasosCompletados([]);
@@ -409,8 +352,10 @@ export default function App() {
 
   const abrirRecetaDesdeOpiniones = () => {
     if (!recetaOpinion) return;
+    const resultado = crearResultadoLocal(recetaOpinion);
+    scrollPendienteRecetaRef.current = resultado.id;
     setPantallaAnterior('inicio');
-    setRecetaSeleccionada(crearResultadoLocal(recetaOpinion));
+    setRecetaSeleccionada(resultado);
     setPasosCompletados([]);
     setPantalla('detalle');
   };
@@ -514,6 +459,15 @@ export default function App() {
     pantalla,
     tiempoFiltro,
   ]);
+
+  const resultadosRecomendados = useMemo(() => {
+    if (pantalla !== 'resultados' || ingredientesSeleccionados.length === 0) return [];
+    return CATALOGO_COMPLETO.map((receta) => {
+      return crearResultadoLocal(receta);
+    })
+      .filter((resultado) => resultado.porcentaje >= 50)
+      .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+  }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
 
   const correoContactoValido = !correoContacto.trim()
     || (correoContacto.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoContacto.trim()));
@@ -989,42 +943,23 @@ export default function App() {
         <TouchableOpacity
           style={[
             styles.botonPrincipal,
-            (cargando || ingredientesSeleccionados.length === 0) &&
-              styles.botonDeshabilitado,
+            ingredientesSeleccionados.length === 0 && styles.botonDeshabilitado,
           ]}
           onPress={buscarRecetas}
-          disabled={cargando || ingredientesSeleccionados.length === 0}
+          disabled={ingredientesSeleccionados.length === 0}
           activeOpacity={0.75}
           accessibilityRole="button"
         >
-          {cargando ? (
-            <View style={styles.filaCargando}>
-              <ActivityIndicator color="#FFFFFF" />
-              <Text style={styles.textoBotonPrincipal}>Buscando recetas...</Text>
-            </View>
-          ) : (
-            <Text style={styles.textoBotonPrincipal}>
-              Buscar recetas ({ingredientesSeleccionados.length})
-            </Text>
-          )}
+          <Text style={styles.textoBotonPrincipal}>
+            Buscar recetas ({ingredientesSeleccionados.length})
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
   const mostrarResultados = () => {
-    const idsServidor = new Map(resultadosAPI.map((resultado) => [
-      resultado.nombre.toLocaleLowerCase('es-MX'), resultado.id,
-    ]));
-    const resultados = ingredientesSeleccionados.length === 0
-      ? []
-      : CATALOGO_COMPLETO.map((receta) => {
-        const resultado = crearResultadoLocal(receta);
-        const idServidor = idsServidor.get(receta.nombre.toLocaleLowerCase('es-MX'));
-        return idServidor === undefined ? resultado : { ...resultado, id: idServidor };
-      })
-        .filter((resultado) => resultado.porcentaje >= 50)
-        .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+    const resultados = resultadosRecomendados;
 
     return (
       <View style={styles.contenedorPantalla}>
@@ -1391,12 +1326,18 @@ export default function App() {
     const recetaActual = crearResultadoLocal(recetaSeleccionada);
 
     return (
-      <View style={styles.contenedorPantalla}>
+      <View key={`detalle-receta-${recetaSeleccionada.id}`} style={styles.contenedorPantalla}>
         {botonRegreso('Volver a inicio', volver)}
 
         <ScrollView
           ref={detalleScrollRef}
           key={`detalle-receta-${recetaSeleccionada.id}`}
+          contentOffset={{ x: 0, y: 0 }}
+          onContentSizeChange={() => {
+            if (scrollPendienteRecetaRef.current !== recetaSeleccionada.id) return;
+            detalleScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+            scrollPendienteRecetaRef.current = null;
+          }}
           style={styles.listaDesplazable}
           contentContainerStyle={styles.contenidoDetalle}
           showsVerticalScrollIndicator={false}
