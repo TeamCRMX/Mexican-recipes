@@ -18,11 +18,16 @@ type Receta = {
 };
 
 const rutaCatalogo = new URL('../../../mobile/src/data/recetas.ts', import.meta.url);
+const rutaBebidas = new URL('../../../mobile/src/data/bebidas.ts', import.meta.url);
 
 async function sembrarRecetas() {
   const { RECETAS } = (await import(rutaCatalogo.href)) as {
     RECETAS: Receta[];
   };
+  const { BEBIDAS } = (await import(rutaBebidas.href)) as {
+    BEBIDAS: Receta[];
+  };
+  const catalogo = [...RECETAS, ...BEBIDAS];
   const cliente = await pool.connect();
 
   try {
@@ -85,7 +90,7 @@ async function sembrarRecetas() {
       CREATE INDEX IF NOT EXISTS ix_contacto_estado_fecha ON mensajes_contacto (estado, creado_en DESC);
     `);
 
-    for (const receta of RECETAS) {
+    for (const receta of catalogo) {
       const guardada = await cliente.query<{ id_receta: number }>(
         `INSERT INTO recetas
           (nombre, descripcion, categoria, tiempo_preparacion, porciones, dificultad, emoji, consejo, preparacion, utensilios, equipos, fuente_url)
@@ -139,7 +144,7 @@ async function sembrarRecetas() {
     }
 
     await cliente.query('COMMIT');
-    console.log(`Catálogo cargado: ${RECETAS.length} recetas mexicanas.`);
+    console.log(`Catálogo cargado: ${catalogo.length} recetas mexicanas, incluidas bebidas.`);
   } catch (error) {
     await cliente.query('ROLLBACK');
     console.error('No se pudo cargar el catálogo de recetas:', error);

@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   BackHandler,
+  FlatList,
   Linking,
   ScrollView,
   StyleSheet,
@@ -10,17 +12,31 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Easing,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
 import {
   CATEGORIAS_RECETA,
-  INGREDIENTES_DISPONIBLES,
   RECETAS,
   type CategoriaReceta,
   type Receta,
 } from './src/data/recetas';
+import { BEBIDAS } from './src/data/bebidas';
+
+const CATALOGO_COMPLETO: Receta[] = [...RECETAS, ...BEBIDAS];
+const INGREDIENTES_CATALOGO = Array.from(
+  new Map(
+    CATALOGO_COMPLETO.flatMap((receta) => receta.ingredientes)
+      .map((ingrediente) => [ingrediente.nombre, { nombre: ingrediente.nombre, categoria: ingrediente.categoria }]),
+  ).values(),
+).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
+const normalizarTexto = (valor: string) => valor
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLocaleLowerCase('es-MX');
+const TEXTO_BUSQUEDA_CACHE = new WeakMap<Receta, string>();
 
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
@@ -32,7 +48,6 @@ type Opinion = {
   comentario: string;
   creado_en: string;
 };
-
 const ICONO_CATEGORIA: Record<CategoriaReceta, string> = {
   Desayuno: '☀️',
   Comida: '🍽️',
@@ -40,6 +55,7 @@ const ICONO_CATEGORIA: Record<CategoriaReceta, string> = {
   Entrada: '🥣',
   Postre: '🍮',
   Acompañamiento: '🥗',
+  Bebidas: '🥤',
 };
 
 const getBackendUrl = () => {
@@ -73,6 +89,9 @@ type ResultadoReceta = Receta & {
 export default function App() {
   const { width } = useWindowDimensions();
   const pantallaAncha = width >= 600;
+  const detalleScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const scrollPendienteRecetaRef = useRef<number | null>(null);
+  const solicitudRecomendacionesRef = useRef(0);
 
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [pantallaAnterior, setPantallaAnterior] = useState<Pantalla>('inicio');
@@ -81,8 +100,6 @@ export default function App() {
   >([]);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
-  const [resultadosAPI, setResultadosAPI] = useState<ResultadoReceta[]>([]);
-  const [cargando, setCargando] = useState(false);
   const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
   const [catalogoLocal, setCatalogoLocal] = useState(false);
   const [busquedaCatalogo, setBusquedaCatalogo] = useState('');
@@ -93,8 +110,9 @@ export default function App() {
   const [ordenCatalogo, setOrdenCatalogo] = useState<'Recomendadas' | 'Más rápidas' | 'A-Z'>('Recomendadas');
   const [recetaDestacada, setRecetaDestacada] = useState<Receta>(RECETAS[0]);
   const [pasosCompletados, setPasosCompletados] = useState<number[]>([]);
-  const [ingredientesRevisados, setIngredientesRevisados] = useState<string[]>([]);
   const [recetaOpinion, setRecetaOpinion] = useState<Receta | null>(null);
+  const [recetaOpinionNombre, setRecetaOpinionNombre] = useState<string | null>(null);
+  const [seccionOpiniones, setSeccionOpiniones] = useState<'generales' | 'recetas'>('generales');
   const [opiniones, setOpiniones] = useState<Opinion[]>([]);
   const [promedioOpiniones, setPromedioOpiniones] = useState(0);
   const [cargandoOpiniones, setCargandoOpiniones] = useState(false);
@@ -108,39 +126,55 @@ export default function App() {
   const [mensajeContacto, setMensajeContacto] = useState('');
   const [enviandoContacto, setEnviandoContacto] = useState(false);
   const [estadoContacto, setEstadoContacto] = useState('');
+  const [animacionDado] = useState(() => new Animated.Value(0));
+  const rotacionDado = animacionDado.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '720deg'],
+  });
 
-  const cargarOpiniones = useCallback(async () => {
+  const cargarOpiniones = useCallback(async (nombreReceta: string | null = recetaOpinionNombre): Promise<boolean> => {
     setCargandoOpiniones(true);
-    setEstadoOpinion('');
     try {
-      const query = recetaOpinion
-        ? `?receta=${encodeURIComponent(recetaOpinion.nombre)}`
+      const query = nombreReceta
+        ? `?receta=${encodeURIComponent(nombreReceta)}`
         : '';
       const respuesta = await fetchConTiempo(`${getBackendUrl()}/api/opiniones${query}`);
       const datos = await respuesta.json();
       if (!respuesta.ok) throw new Error(datos.mensaje ?? 'No se pudieron cargar las opiniones.');
       setOpiniones(datos.opiniones ?? []);
       setPromedioOpiniones(Number(datos.promedio) || 0);
+      return true;
     } catch {
-      setOpiniones([]);
-      setPromedioOpiniones(0);
       setEstadoOpinion('No se pudieron cargar las opiniones. Revisa tu conexión con el servidor.');
+      return false;
     } finally {
       setCargandoOpiniones(false);
     }
-  }, [recetaOpinion]);
-
-  useEffect(() => {
-    if (pantalla === 'opiniones') void cargarOpiniones();
-  }, [pantalla, cargarOpiniones]);
+  }, [recetaOpinionNombre]);
 
   const volver = useCallback(() => {
     if (pantalla === 'detalle') {
-      setPantalla(pantallaAnterior);
+      setRecetaSeleccionada(null);
+      setPasosCompletados([]);
+      setPantallaAnterior('inicio');
+      setPantalla('inicio');
       return true;
     }
 
-    if (pantalla === 'opiniones' || pantalla === 'contacto') {
+    if (pantalla === 'opiniones') {
+      setRecetaOpinion(null);
+      setRecetaOpinionNombre(null);
+      setSeccionOpiniones('generales');
+      setOpiniones([]);
+      setPromedioOpiniones(0);
+      setEstadoOpinion('');
+      setRecetaSeleccionada(null);
+      setPantallaAnterior('inicio');
+      setPantalla('inicio');
+      return true;
+    }
+
+    if (pantalla === 'contacto') {
       setPantalla(pantallaAnterior);
       return true;
     }
@@ -172,6 +206,21 @@ export default function App() {
     return () => suscripcion.remove();
   }, [volver]);
 
+  useLayoutEffect(() => {
+    if (pantalla !== 'detalle') return;
+
+    let segundoFrame: number | null = null;
+    const frame = requestAnimationFrame(() => {
+      segundoFrame = requestAnimationFrame(() => {
+        detalleScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (segundoFrame !== null) cancelAnimationFrame(segundoFrame);
+    };
+  }, [pantalla, recetaSeleccionada?.id]);
+
   const alternarIngrediente = (ingrediente: string) => {
     setIngredientesSeleccionados((actuales) => {
       if (actuales.includes(ingrediente)) {
@@ -187,7 +236,7 @@ export default function App() {
     setBusquedaIngrediente('');
   };
 
-  const crearResultadoLocal = (receta: Receta): ResultadoReceta => {
+  const crearResultadoLocal = useCallback((receta: Receta): ResultadoReceta => {
     const disponibles = receta.ingredientes
       .filter((ingrediente) => ingredientesSeleccionados.includes(ingrediente.nombre))
       .map((ingrediente) => ingrediente.nombre);
@@ -206,7 +255,7 @@ export default function App() {
       disponibles,
       faltantes,
     };
-  };
+  }, [ingredientesSeleccionados]);
 
   const buscarRecetas = async () => {
     if (ingredientesSeleccionados.length === 0) {
@@ -217,8 +266,10 @@ export default function App() {
       return;
     }
 
-    setCargando(true);
-    const resultadosLocales = RECETAS.map(crearResultadoLocal);
+    const solicitudActual = ++solicitudRecomendacionesRef.current;
+    setCatalogoLocal(true);
+    setPantalla('resultados');
+
     const controlador = new AbortController();
     const temporizador = setTimeout(() => controlador.abort(), 6000);
 
@@ -236,6 +287,7 @@ export default function App() {
       );
 
       const datos = await respuesta.json();
+      if (solicitudActual !== solicitudRecomendacionesRef.current) return;
 
       if (!respuesta.ok) {
         throw new Error(
@@ -243,99 +295,71 @@ export default function App() {
         );
       }
 
-      const recomendacionesServidor = (datos.recomendaciones ?? []).map(
-        (item: {
-          id_receta: number;
-          nombre: string;
-          descripcion: string | null;
-          tiempo_preparacion: number | null;
-          dificultad: string | null;
-          porcentajeCoincidencia: number;
-          preparacion?: string[];
-          utensilios?: string[];
-          equipos?: string[];
-          fuente_url?: string | null;
-          categoria?: string | null;
-          porciones?: number | null;
-          emoji?: string | null;
-          consejo?: string | null;
-        }) => ({ nombre: item.nombre, item }),
-      );
-
-      const recetasServidor = new Map(
-        recomendacionesServidor.map(({ nombre, item }: { nombre: string; item: Record<string, unknown> }) => [
-          nombre.toLocaleLowerCase('es-MX'), item,
-        ]),
-      );
-      const catalogoParcial = recetasServidor.size < RECETAS.length;
-      const resultados = resultadosLocales.map((local) => {
-        const servidor = recetasServidor.get(local.nombre.toLocaleLowerCase('es-MX')) as
-          | {
-              id_receta: number;
-              porcentajeCoincidencia: number;
-              preparacion?: string[];
-              utensilios?: string[];
-              equipos?: string[];
-              fuente_url?: string | null;
-              categoria?: string | null;
-              porciones?: number | null;
-              emoji?: string | null;
-              consejo?: string | null;
-            }
-          | undefined;
-
-        if (!servidor) return local;
-        return {
-          ...local,
-          id: servidor.id_receta,
-          porcentaje: catalogoParcial
-            ? local.porcentaje
-            : servidor.porcentajeCoincidencia,
-          preparacion: servidor.preparacion?.length ? servidor.preparacion : local.preparacion,
-          utensilios: servidor.utensilios?.length ? servidor.utensilios : local.utensilios,
-          equipos: servidor.equipos?.length ? servidor.equipos : local.equipos,
-          fuenteUrl: servidor.fuente_url ?? local.fuenteUrl,
-          categoria: (servidor.categoria as CategoriaReceta | null) ?? local.categoria,
-          porciones: servidor.porciones ?? local.porciones,
-          emoji: servidor.emoji ?? local.emoji,
-          consejo: servidor.consejo ?? local.consejo,
-        };
-      });
-      const resultadosConCoincidencia = resultados.filter((resultado) => resultado.porcentaje > 0);
-      resultadosConCoincidencia.sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
-      setCatalogoLocal(catalogoParcial);
-      setResultadosAPI(resultadosConCoincidencia);
-      setPantalla('resultados');
+      const recomendacionesServidor = Array.isArray(datos.recomendaciones) ? datos.recomendaciones : [];
+      const catalogoTotal = Number(datos.catalogoTotal ?? recomendacionesServidor.length);
+      setCatalogoLocal(catalogoTotal < CATALOGO_COMPLETO.length);
     } catch {
-      const resultadosConCoincidencia = resultadosLocales
-        .filter((resultado) => resultado.porcentaje > 0)
-        .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
-      setResultadosAPI(resultadosConCoincidencia);
-      setCatalogoLocal(true);
-      setPantalla('resultados');
+      // Las recomendaciones locales ya están visibles; la sincronización es opcional.
     } finally {
       clearTimeout(temporizador);
-      setCargando(false);
     }
   };
 
   const abrirDetalle = (receta: ResultadoReceta) => {
-    setPantallaAnterior(pantalla);
+    scrollPendienteRecetaRef.current = receta.id;
+    setPantallaAnterior('inicio');
     setRecetaSeleccionada(receta);
     setPasosCompletados([]);
-    setIngredientesRevisados([]);
     setPantalla('detalle');
   };
 
-  const abrirOpiniones = (receta: Receta | null = null) => {
+  const abrirOpiniones = (
+    receta: Receta | null = null,
+    nombreReceta: string | null = receta?.nombre ?? null,
+  ) => {
     setPantallaAnterior(pantalla);
     setRecetaOpinion(receta);
+    setRecetaOpinionNombre(nombreReceta);
+    setSeccionOpiniones(receta || nombreReceta ? 'recetas' : 'generales');
     setOpiniones([]);
     setPromedioOpiniones(0);
     setTextoOpinion('');
     setCalificacionOpinion(5);
     setEstadoOpinion('');
     setPantalla('opiniones');
+    void cargarOpiniones(nombreReceta);
+  };
+
+  const abrirListaOpiniones = (seccion: 'generales' | 'recetas') => {
+    setPantallaAnterior(pantalla);
+    setRecetaOpinion(null);
+    setRecetaOpinionNombre(null);
+    setSeccionOpiniones(seccion);
+    setOpiniones([]);
+    setPromedioOpiniones(0);
+    setEstadoOpinion('');
+    setPantalla('opiniones');
+    void cargarOpiniones(null);
+  };
+
+  const abrirOpinionSeleccionada = (opinion: Opinion) => {
+    if (!opinion.nombre_receta) {
+      setSeccionOpiniones('generales');
+      return;
+    }
+    const receta = CATALOGO_COMPLETO.find((item) =>
+      item.nombre.toLocaleLowerCase('es-MX') === opinion.nombre_receta?.toLocaleLowerCase('es-MX')) ?? null;
+    abrirOpiniones(receta, opinion.nombre_receta);
+  };
+
+  const abrirRecetaDesdeOpiniones = () => {
+    if (!recetaOpinion) return;
+    const resultado = crearResultadoLocal(recetaOpinion);
+    scrollPendienteRecetaRef.current = resultado.id;
+    setPantallaAnterior('inicio');
+    setRecetaSeleccionada(resultado);
+    setPasosCompletados([]);
+    setPantalla('detalle');
   };
 
   const abrirContacto = () => {
@@ -348,12 +372,6 @@ export default function App() {
     setPasosCompletados((actuales) => actuales.includes(indice)
       ? actuales.filter((item) => item !== indice)
       : [...actuales, indice]);
-  };
-
-  const alternarIngredienteRevisado = (nombre: string) => {
-    setIngredientesRevisados((actuales) => actuales.includes(nombre)
-      ? actuales.filter((item) => item !== nombre)
-      : [...actuales, nombre]);
   };
 
   const botonRegreso = (
@@ -383,57 +401,113 @@ export default function App() {
     </View>
   );
 
-  const ingredientesFiltrados = INGREDIENTES_DISPONIBLES.filter((ingrediente) =>
-    `${ingrediente.nombre} ${ingrediente.categoria}`
-      .toLocaleLowerCase('es-MX')
-      .includes(busquedaIngrediente.trim().toLocaleLowerCase('es-MX')),
-  );
+  const ingredientesFiltrados = useMemo(() => {
+    if (pantalla !== 'ingredientes') return [];
+    const busqueda = busquedaIngrediente.trim().toLocaleLowerCase('es-MX');
+    return INGREDIENTES_CATALOGO.filter((ingrediente) =>
+      `${ingrediente.nombre} ${ingrediente.categoria}`
+        .toLocaleLowerCase('es-MX')
+        .includes(busqueda),
+    );
+  }, [busquedaIngrediente, pantalla]);
 
-  const normalizarTexto = (valor: string) => valor
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLocaleLowerCase('es-MX');
+  const vistaPreviaRecetas = useMemo(() => {
+    if (pantalla !== 'ingredientes' || ingredientesSeleccionados.length === 0) return [];
+    return CATALOGO_COMPLETO.map(crearResultadoLocal)
+      .filter((resultado) => resultado.porcentaje >= 50)
+      .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+  }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
 
-  const recetasFiltradas = RECETAS.filter((receta) => {
-    const campos = normalizarTexto([
-      receta.nombre,
-      receta.descripcion,
-      receta.categoria,
-      receta.dificultad,
-      `${receta.tiempoMin} minutos`,
-      `${receta.porciones} porciones`,
-      receta.ingredientes.map((item) => `${item.nombre} ${item.cantidad} ${item.categoria}`).join(' '),
-      receta.preparacion.join(' '),
-      receta.utensilios.join(' '),
-      receta.equipos.join(' '),
-    ].join(' '));
-    const busqueda = normalizarTexto(busquedaCatalogo.trim());
-    const ingrediente = normalizarTexto(ingredienteFiltro.trim());
-    const tieneIngrediente = !ingrediente || receta.ingredientes.some((item) =>
-      normalizarTexto(item.nombre).includes(ingrediente));
+  const busquedaCatalogoNormalizada = normalizarTexto(busquedaCatalogo.trim());
+  const ingredienteFiltroNormalizado = normalizarTexto(ingredienteFiltro.trim());
+  const recetasFiltradas = useMemo(() => {
+    if (pantalla !== 'catalogo') return [];
+    const candidatas = CATALOGO_COMPLETO.filter((receta) => {
+      if (categoriaFiltro !== 'Todas' && receta.categoria !== categoriaFiltro) return false;
+      if (dificultadFiltro !== 'Todas' && receta.dificultad !== dificultadFiltro) return false;
+      if (tiempoFiltro !== null && receta.tiempoMin > tiempoFiltro) return false;
+      if (ingredienteFiltroNormalizado && !receta.ingredientes.some((item) =>
+        normalizarTexto(item.nombre).includes(ingredienteFiltroNormalizado))) return false;
+      if (!busquedaCatalogoNormalizada) return true;
 
-    return (categoriaFiltro === 'Todas' || receta.categoria === categoriaFiltro)
-      && (dificultadFiltro === 'Todas' || receta.dificultad === dificultadFiltro)
-      && (tiempoFiltro === null || receta.tiempoMin <= tiempoFiltro)
-      && (!busqueda || campos.includes(busqueda))
-      && tieneIngrediente;
-  }).sort((a, b) => {
-    if (ordenCatalogo === 'Más rápidas') return a.tiempoMin - b.tiempoMin || a.nombre.localeCompare(b.nombre, 'es-MX');
-    if (ordenCatalogo === 'A-Z') return a.nombre.localeCompare(b.nombre, 'es-MX');
-    const coincidencia = (receta: Receta) => ingredientesSeleccionados.length
-      ? receta.ingredientes.filter((item) => ingredientesSeleccionados.includes(item.nombre)).length / receta.ingredientes.length
-      : 0;
-    return coincidencia(b) - coincidencia(a) || a.nombre.localeCompare(b.nombre, 'es-MX');
-  });
+      let campos = TEXTO_BUSQUEDA_CACHE.get(receta);
+      if (!campos) {
+        campos = normalizarTexto([
+          receta.nombre,
+          receta.descripcion,
+          receta.categoria,
+          receta.dificultad,
+          `${receta.tiempoMin} minutos`,
+          `${receta.porciones} porciones`,
+          receta.ingredientes.map((item) => `${item.nombre} ${item.cantidad} ${item.categoria}`).join(' '),
+          receta.preparacion.join(' '),
+          receta.utensilios.join(' '),
+          receta.equipos.join(' '),
+        ].join(' '));
+        TEXTO_BUSQUEDA_CACHE.set(receta, campos);
+      }
+      return campos.includes(busquedaCatalogoNormalizada);
+    });
+
+    if (ordenCatalogo === 'Más rápidas') {
+      return candidatas.sort((a, b) => a.tiempoMin - b.tiempoMin || a.nombre.localeCompare(b.nombre, 'es-MX'));
+    }
+    if (ordenCatalogo === 'A-Z') {
+      return candidatas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
+    }
+
+    const ingredientesDisponibles = new Set(ingredientesSeleccionados);
+    const coincidencias = new Map(candidatas.map((receta) => [
+      receta,
+      ingredientesDisponibles.size
+        ? receta.ingredientes.filter((item) => ingredientesDisponibles.has(item.nombre)).length / receta.ingredientes.length
+        : 0,
+    ]));
+    return candidatas.sort((a, b) => {
+      return (coincidencias.get(b) ?? 0) - (coincidencias.get(a) ?? 0)
+        || a.nombre.localeCompare(b.nombre, 'es-MX');
+    });
+  }, [
+    busquedaCatalogoNormalizada,
+    categoriaFiltro,
+    dificultadFiltro,
+    ingredienteFiltroNormalizado,
+    ingredientesSeleccionados,
+    ordenCatalogo,
+    pantalla,
+    tiempoFiltro,
+  ]);
+
+  const resultadosRecomendados = useMemo(() => {
+    if (pantalla !== 'resultados' || ingredientesSeleccionados.length === 0) return [];
+    return CATALOGO_COMPLETO.map((receta) => {
+      return crearResultadoLocal(receta);
+    })
+      .filter((resultado) => resultado.porcentaje >= 50)
+      .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
+  }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
+
+  const correoContactoValido = !correoContacto.trim()
+    || (correoContacto.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoContacto.trim()));
 
   const sorprenderme = () => {
-    const indice = Math.floor(Math.random() * RECETAS.length);
-    setRecetaDestacada(RECETAS[indice]);
+    const indice = Math.floor(Math.random() * CATALOGO_COMPLETO.length);
+    setRecetaDestacada(CATALOGO_COMPLETO[indice]);
+    animacionDado.stopAnimation();
+    animacionDado.setValue(0);
+    Animated.timing(animacionDado, {
+      toValue: 1,
+      duration: 850,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) animacionDado.setValue(0);
+    });
   };
 
   const enviarOpinion = async () => {
-    if (textoOpinion.trim().length < 10) {
-      setEstadoOpinion('Cuéntanos un poco más: escribe al menos 10 caracteres.');
+    if (nombreOpinion.trim().length > 80 || textoOpinion.trim().length < 10 || textoOpinion.trim().length > 600) {
+      setEstadoOpinion('Revisa los campos: el nombre admite hasta 80 caracteres y la opinión debe tener entre 10 y 600.');
       return;
     }
     setEnviandoOpinion(true);
@@ -446,14 +520,17 @@ export default function App() {
           nombre: nombreOpinion.trim() || 'Anónimo',
           calificacion: calificacionOpinion,
           comentario: textoOpinion.trim(),
-          receta: recetaOpinion?.nombre ?? 'La app',
+          receta: recetaOpinionNombre ?? 'La app',
         }),
       });
       const datos = await respuesta.json();
       if (!respuesta.ok) throw new Error(datos.mensaje ?? 'No se pudo guardar tu opinión.');
       setTextoOpinion('');
-      await cargarOpiniones();
+      if (datos.opinion) setOpiniones((actuales) => [datos.opinion, ...actuales].slice(0, 100));
       setEstadoOpinion(datos.mensaje ?? '¡Gracias por compartir tu opinión!');
+      if (!(await cargarOpiniones(recetaOpinionNombre))) {
+        setEstadoOpinion('Tu opinión se guardó, pero no se pudo actualizar la lista. Intenta recargarla en unos momentos.');
+      }
     } catch (error) {
       setEstadoOpinion(error instanceof Error
         ? error.message
@@ -464,8 +541,13 @@ export default function App() {
   };
 
   const enviarContacto = async () => {
-    if (nombreContacto.trim().length < 2 || mensajeContacto.trim().length < 10) {
+    const correo = correoContacto.trim();
+    if (nombreContacto.trim().length < 2 || nombreContacto.trim().length > 80 || mensajeContacto.trim().length < 10 || mensajeContacto.trim().length > 1200) {
       setEstadoContacto('Completa tu nombre y escribe un mensaje de al menos 10 caracteres.');
+      return;
+    }
+    if (correo && (correo.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo))) {
+      setEstadoContacto('Revisa el formato del correo electrónico o déjalo vacío.');
       return;
     }
     setEnviandoContacto(true);
@@ -476,7 +558,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nombre: nombreContacto.trim(),
-          correo: correoContacto.trim(),
+          correo,
           mensaje: mensajeContacto.trim(),
         }),
       });
@@ -528,17 +610,17 @@ export default function App() {
 
         <View style={styles.resumenInicio}>
           <View style={styles.datoInicio}>
-            <Text style={styles.numeroInicio}>{RECETAS.length}</Text>
+            <Text style={styles.numeroInicio}>{CATALOGO_COMPLETO.length}</Text>
             <Text style={styles.etiquetaInicio}>recetas mexicanas</Text>
           </View>
           <View style={styles.separadorInicio} />
           <View style={styles.datoInicio}>
-            <Text style={styles.numeroInicio}>{INGREDIENTES_DISPONIBLES.length}</Text>
+            <Text style={styles.numeroInicio}>{INGREDIENTES_CATALOGO.length}</Text>
             <Text style={styles.etiquetaInicio}>ingredientes</Text>
           </View>
           <View style={styles.separadorInicio} />
           <View style={styles.datoInicio}>
-            <Text style={styles.numeroInicio}>6</Text>
+            <Text style={styles.numeroInicio}>{CATEGORIAS_RECETA.length}</Text>
             <Text style={styles.etiquetaInicio}>categorías</Text>
           </View>
         </View>
@@ -566,7 +648,7 @@ export default function App() {
                 <Text style={styles.iconoCategoriaInicio}>{ICONO_CATEGORIA[categoria]}</Text>
                 <View style={styles.textoCategoriaInicio}>
                   <Text style={styles.nombreCategoriaInicio}>{categoria}</Text>
-                  <Text style={styles.cantidadCategoriaInicio}>{RECETAS.filter((item) => item.categoria === categoria).length} recetas</Text>
+                  <Text style={styles.cantidadCategoriaInicio}>{CATALOGO_COMPLETO.filter((item) => item.categoria === categoria).length} recetas</Text>
                 </View>
                 <Text style={styles.flechaCategoriaInicio}>›</Text>
               </TouchableOpacity>
@@ -578,7 +660,10 @@ export default function App() {
           <View style={styles.encabezadoDestacada}>
             <Text style={styles.etiquetaDestacada}>ANTOJO DEL MOMENTO</Text>
             <TouchableOpacity onPress={sorprenderme} accessibilityRole="button" accessibilityLabel="Elegir otra receta al azar">
-              <Text style={styles.botonAzar}>🎲 Sorpréndeme</Text>
+              <View style={styles.botonAzar}>
+                <Animated.Text style={[styles.dadoSorprendeme, { transform: [{ rotate: rotacionDado }] }]}>🎲</Animated.Text>
+                <Text style={styles.textoSorprendeme}>Sorpréndeme</Text>
+              </View>
             </TouchableOpacity>
           </View>
           <View style={styles.filaDestacada}>
@@ -619,117 +704,128 @@ export default function App() {
     <View style={styles.contenedorPantalla}>
       {botonRegreso('Inicio', () => setPantalla('inicio'))}
       {encabezado('Explorar recetas', 'Combina filtros por categoría, ingrediente, dificultad y tiempo.')}
-      <ScrollView style={styles.listaDesplazable} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        <TextInput
-          value={busquedaCatalogo}
-          onChangeText={setBusquedaCatalogo}
-          placeholder="Busca también en preparación, equipo y utensilios"
-          placeholderTextColor="#8B958B"
-          style={styles.campoBusqueda}
-          accessibilityLabel="Buscar en todos los datos de las recetas"
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-        />
-        <Text style={styles.ayudaFiltro}>La búsqueda general revisa nombres, ingredientes, preparación, utensilios y equipo.</Text>
+      <FlatList
+        style={styles.listaDesplazable}
+        data={recetasFiltradas}
+        keyExtractor={(receta) => String(receta.id)}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        ListHeaderComponent={(
+          <View>
+            <TextInput
+              value={busquedaCatalogo}
+              onChangeText={setBusquedaCatalogo}
+              placeholder="Busca también en preparación, equipo y utensilios"
+              placeholderTextColor="#8B958B"
+              style={styles.campoBusqueda}
+              accessibilityLabel="Buscar en todos los datos de las recetas"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+            <Text style={styles.ayudaFiltro}>La búsqueda general revisa nombres, ingredientes, preparación, utensilios y equipo.</Text>
 
-        <Text style={styles.tituloFiltro}>Categoría</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsFila}>
-          {(['Todas', ...CATEGORIAS_RECETA] as const).map((categoria) => (
-            <TouchableOpacity
-              key={categoria}
-              onPress={() => setCategoriaFiltro(categoria)}
-              style={[styles.chipFiltro, categoriaFiltro === categoria && styles.chipFiltroActivo]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: categoriaFiltro === categoria }}
-            >
-              <Text style={[styles.textoChipFiltro, categoriaFiltro === categoria && styles.textoChipFiltroActivo]}>
-                {categoria === 'Todas' ? '🍽️ Todas' : `${ICONO_CATEGORIA[categoria]} ${categoria}`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            <Text style={styles.tituloFiltro}>Categoría</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsFila}>
+              {(['Todas', ...CATEGORIAS_RECETA] as const).map((categoria) => (
+                <TouchableOpacity
+                  key={categoria}
+                  onPress={() => setCategoriaFiltro(categoria)}
+                  style={[styles.chipFiltro, categoriaFiltro === categoria && styles.chipFiltroActivo]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: categoriaFiltro === categoria }}
+                >
+                  <Text style={[styles.textoChipFiltro, categoriaFiltro === categoria && styles.textoChipFiltroActivo]}>
+                    {categoria === 'Todas' ? '🍽️ Todas' : `${ICONO_CATEGORIA[categoria]} ${categoria}`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-        <Text style={styles.tituloFiltro}>Ingrediente</Text>
-        <TextInput
-          value={ingredienteFiltro}
-          onChangeText={setIngredienteFiltro}
-          placeholder="Ej. aguacate, frijol, elote…"
-          placeholderTextColor="#8B958B"
-          style={styles.campoBusqueda}
-          accessibilityLabel="Filtrar recetas por ingrediente"
-          clearButtonMode="while-editing"
-        />
+            <Text style={styles.tituloFiltro}>Ingrediente</Text>
+            <TextInput
+              value={ingredienteFiltro}
+              onChangeText={setIngredienteFiltro}
+              placeholder="Ej. aguacate, frijol, elote…"
+              placeholderTextColor="#8B958B"
+              style={styles.campoBusqueda}
+              accessibilityLabel="Filtrar recetas por ingrediente"
+              clearButtonMode="while-editing"
+            />
 
-        <Text style={styles.tituloFiltro}>Dificultad</Text>
-        <View style={styles.chipsAjustables}>
-          {(['Todas', 'Fácil', 'Media', 'Avanzada'] as const).map((dificultad) => (
-            <TouchableOpacity
-              key={dificultad}
-              onPress={() => setDificultadFiltro(dificultad)}
-              style={[styles.chipFiltro, dificultadFiltro === dificultad && styles.chipFiltroActivo]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: dificultadFiltro === dificultad }}
-            >
-              <Text style={[styles.textoChipFiltro, dificultadFiltro === dificultad && styles.textoChipFiltroActivo]}>{dificultad}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            <Text style={styles.tituloFiltro}>Dificultad</Text>
+            <View style={styles.chipsAjustables}>
+              {(['Todas', 'Fácil', 'Media', 'Avanzada'] as const).map((dificultad) => (
+                <TouchableOpacity
+                  key={dificultad}
+                  onPress={() => setDificultadFiltro(dificultad)}
+                  style={[styles.chipFiltro, dificultadFiltro === dificultad && styles.chipFiltroActivo]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: dificultadFiltro === dificultad }}
+                >
+                  <Text style={[styles.textoChipFiltro, dificultadFiltro === dificultad && styles.textoChipFiltroActivo]}>{dificultad}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <Text style={styles.tituloFiltro}>Tiempo máximo</Text>
-        <View style={styles.chipsAjustables}>
-          {[null, 20, 30, 45, 60, 90, 120].map((minutos) => (
-            <TouchableOpacity
-              key={minutos ?? 'cualquiera'}
-              onPress={() => setTiempoFiltro(minutos)}
-              style={[styles.chipFiltro, tiempoFiltro === minutos && styles.chipFiltroActivo]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: tiempoFiltro === minutos }}
-            >
-              <Text style={[styles.textoChipFiltro, tiempoFiltro === minutos && styles.textoChipFiltroActivo]}>{minutos ? `≤ ${minutos} min` : 'Cualquiera'}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+            <Text style={styles.tituloFiltro}>Tiempo máximo</Text>
+            <View style={styles.chipsAjustables}>
+              {[null, 20, 30, 45, 60, 90, 120].map((minutos) => (
+                <TouchableOpacity
+                  key={minutos ?? 'cualquiera'}
+                  onPress={() => setTiempoFiltro(minutos)}
+                  style={[styles.chipFiltro, tiempoFiltro === minutos && styles.chipFiltroActivo]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: tiempoFiltro === minutos }}
+                >
+                  <Text style={[styles.textoChipFiltro, tiempoFiltro === minutos && styles.textoChipFiltroActivo]}>{minutos ? `≤ ${minutos} min` : 'Cualquiera'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-        <View style={styles.filaOrdenCatalogo}>
-          <Text style={styles.tituloFiltro}>Ordenar</Text>
-          <View style={styles.chipsAjustables}>
-            {(['Recomendadas', 'Más rápidas', 'A-Z'] as const).map((orden) => (
-              <TouchableOpacity
-                key={orden}
-                onPress={() => setOrdenCatalogo(orden)}
-                style={[styles.chipFiltro, ordenCatalogo === orden && styles.chipFiltroActivo]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: ordenCatalogo === orden }}
-              >
-                <Text style={[styles.textoChipFiltro, ordenCatalogo === orden && styles.textoChipFiltroActivo]}>{orden}</Text>
+            <View style={styles.filaOrdenCatalogo}>
+              <Text style={styles.tituloFiltro}>Ordenar</Text>
+              <View style={styles.chipsAjustables}>
+                {(['Recomendadas', 'Más rápidas', 'A-Z'] as const).map((orden) => (
+                  <TouchableOpacity
+                    key={orden}
+                    onPress={() => setOrdenCatalogo(orden)}
+                    style={[styles.chipFiltro, ordenCatalogo === orden && styles.chipFiltroActivo]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: ordenCatalogo === orden }}
+                  >
+                    <Text style={[styles.textoChipFiltro, ordenCatalogo === orden && styles.textoChipFiltroActivo]}>{orden}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.filaConteoCatalogo}>
+              <Text style={styles.textoConteoCatalogo}>{recetasFiltradas.length} de {CATALOGO_COMPLETO.length} recetas</Text>
+              <TouchableOpacity onPress={() => {
+                setBusquedaCatalogo('');
+                setIngredienteFiltro('');
+                setCategoriaFiltro('Todas');
+                setDificultadFiltro('Todas');
+                setTiempoFiltro(null);
+                setOrdenCatalogo('Recomendadas');
+              }} accessibilityRole="button">
+                <Text style={styles.textoLimpiarFiltros}>Limpiar filtros</Text>
               </TouchableOpacity>
-            ))}
+            </View>
           </View>
-        </View>
-
-        <View style={styles.filaConteoCatalogo}>
-          <Text style={styles.textoConteoCatalogo}>{recetasFiltradas.length} de {RECETAS.length} recetas</Text>
-          <TouchableOpacity onPress={() => {
-            setBusquedaCatalogo('');
-            setIngredienteFiltro('');
-            setCategoriaFiltro('Todas');
-            setDificultadFiltro('Todas');
-            setTiempoFiltro(null);
-            setOrdenCatalogo('Recomendadas');
-          }} accessibilityRole="button">
-            <Text style={styles.textoLimpiarFiltros}>Limpiar filtros</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recetasFiltradas.length === 0 ? (
+        )}
+        ListEmptyComponent={(
           <View style={styles.mensajeVacio}>
             <Text style={styles.emojiVacio}>🔎</Text>
             <Text style={styles.tituloMensajeVacio}>No encontramos recetas</Text>
             <Text style={styles.textoMensajeVacio}>Prueba otro ingrediente o quita algún filtro.</Text>
           </View>
-        ) : recetasFiltradas.map((receta) => (
+        )}
+        renderItem={({ item: receta }) => (
           <TouchableOpacity
-            key={receta.id}
             style={styles.tarjetaCatalogo}
             onPress={() => abrirDetalle(crearResultadoLocal(receta))}
             activeOpacity={0.78}
@@ -748,8 +844,8 @@ export default function App() {
               <Text style={styles.ingredientesTarjetaCatalogo} numberOfLines={1}>{receta.ingredientes.map((item) => item.nombre).join(' · ')}</Text>
             </View>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
+        )}
+      />
     </View>
   );
 
@@ -793,29 +889,69 @@ export default function App() {
         clearButtonMode="while-editing"
       />
       <Text style={styles.textoAyudaIngredientes}>
-        {ingredientesFiltrados.length} ingredientes disponibles · {RECETAS.length} recetas mexicanas
+        {ingredientesFiltrados.length} ingredientes disponibles · {CATALOGO_COMPLETO.length} recetas mexicanas
       </Text>
 
-      <ScrollView
+      <FlatList
         style={styles.listaDesplazable}
         contentContainerStyle={styles.listaIngredientes}
+        data={ingredientesFiltrados}
+        key={pantallaAncha ? 'ingredientes-anchos' : 'ingredientes-compactos'}
+        keyExtractor={(ingrediente) => ingrediente.nombre}
+        numColumns={pantallaAncha ? 3 : 2}
         showsVerticalScrollIndicator={false}
-      >
-        {ingredientesFiltrados.length === 0 ? (
+        initialNumToRender={pantallaAncha ? 18 : 12}
+        maxToRenderPerBatch={pantallaAncha ? 18 : 12}
+        windowSize={7}
+        ListHeaderComponent={ingredientesSeleccionados.length > 0 ? (
+          <View style={styles.vistaPreviaCoincidencias}>
+            <Text style={styles.tituloVistaPrevia}>Vista previa de coincidencias</Text>
+            <Text style={styles.textoVistaPrevia}>
+              {vistaPreviaRecetas.length
+                ? `${vistaPreviaRecetas.length} ${vistaPreviaRecetas.length === 1 ? 'receta supera' : 'recetas superan'} el mínimo de 50%. La lista cambia al marcar o quitar ingredientes.`
+                : 'Aún no hay recetas con 50% de coincidencia. Selecciona otro ingrediente para ver opciones.'}
+            </Text>
+            {vistaPreviaRecetas.slice(0, 4).map((receta) => (
+              <TouchableOpacity
+                key={receta.id}
+                style={styles.tarjetaVistaPrevia}
+                onPress={() => abrirDetalle(receta)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`${receta.nombre}, ${receta.porcentaje}% de coincidencia`}
+              >
+                <View style={styles.filaVistaPrevia}>
+                  <Text style={styles.nombreVistaPrevia}>{receta.emoji} {receta.nombre}</Text>
+                  <Text style={styles.porcentajeVistaPrevia}>{receta.porcentaje}%</Text>
+                </View>
+                <Text style={styles.faltantesVistaPrevia}>
+                  {receta.faltantes.length
+                    ? `Te falta${receta.faltantes.length === 1 ? '' : 'n'}: ${receta.faltantes.slice(0, 4).join(', ')}${receta.faltantes.length > 4 ? ` y ${receta.faltantes.length - 4} más` : ''}`
+                    : 'Tienes todos los ingredientes de esta receta.'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {vistaPreviaRecetas.length > 4 && (
+              <Text style={styles.textoVistaPrevia}>
+                Y {vistaPreviaRecetas.length - 4} recetas más alcanzan el mínimo.
+              </Text>
+            )}
+          </View>
+        ) : undefined}
+        ListEmptyComponent={(
           <Text style={styles.textoSinIngredientes}>
             No hay ingredientes con ese nombre. Prueba otra búsqueda.
           </Text>
-        ) : ingredientesFiltrados.map((ingrediente) => {
+        )}
+        renderItem={({ item: ingrediente }) => {
           const seleccionado =
             ingredientesSeleccionados.includes(ingrediente.nombre);
 
           return (
             <TouchableOpacity
-              key={ingrediente.nombre}
               onPress={() => alternarIngrediente(ingrediente.nombre)}
               style={[
                 styles.botonIngrediente,
-                pantallaAncha && styles.botonIngredienteAncho,
                 seleccionado && styles.ingredienteSeleccionado,
               ]}
               activeOpacity={0.7}
@@ -834,38 +970,30 @@ export default function App() {
               <Text style={styles.categoriaIngrediente}>{ingrediente.categoria}</Text>
             </TouchableOpacity>
           );
-        })}
-      </ScrollView>
+        }}
+      />
 
       <View style={styles.piePantalla}>
         <TouchableOpacity
           style={[
             styles.botonPrincipal,
-            (cargando || ingredientesSeleccionados.length === 0) &&
-              styles.botonDeshabilitado,
+            ingredientesSeleccionados.length === 0 && styles.botonDeshabilitado,
           ]}
           onPress={buscarRecetas}
-          disabled={cargando || ingredientesSeleccionados.length === 0}
+          disabled={ingredientesSeleccionados.length === 0}
           activeOpacity={0.75}
           accessibilityRole="button"
         >
-          {cargando ? (
-            <View style={styles.filaCargando}>
-              <ActivityIndicator color="#FFFFFF" />
-              <Text style={styles.textoBotonPrincipal}>Buscando recetas...</Text>
-            </View>
-          ) : (
-            <Text style={styles.textoBotonPrincipal}>
-              Buscar recetas ({ingredientesSeleccionados.length})
-            </Text>
-          )}
+          <Text style={styles.textoBotonPrincipal}>
+            Buscar recetas ({ingredientesSeleccionados.length})
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
   const mostrarResultados = () => {
-    const resultados = resultadosAPI;
+    const resultados = resultadosRecomendados;
 
     return (
       <View style={styles.contenedorPantalla}>
@@ -917,13 +1045,17 @@ export default function App() {
             </TouchableOpacity>
           </View>
         ) : (
-          <ScrollView
+          <FlatList
             style={styles.listaDesplazable}
             contentContainerStyle={styles.listaResultados}
+            data={resultados}
+            keyExtractor={(receta) => String(receta.id)}
             showsVerticalScrollIndicator={false}
-          >
-            {resultados.map((receta) => (
-              <View key={receta.id} style={styles.tarjetaReceta}>
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={7}
+            renderItem={({ item: receta }) => (
+              <View style={styles.tarjetaReceta}>
                 <View style={styles.filaTituloReceta}>
                   <View style={styles.infoTituloReceta}>
                     <Text style={styles.nombreReceta}>{receta.emoji}  {receta.nombre}</Text>
@@ -987,95 +1119,169 @@ export default function App() {
                   </Text>
                 </TouchableOpacity>
               </View>
-            ))}
-          </ScrollView>
+            )}
+          >
+          </FlatList>
         )}
       </View>
     );
   };
 
-  const mostrarOpiniones = () => (
-    <View style={styles.contenedorPantalla}>
-      {botonRegreso('Volver', volver)}
-      <ScrollView style={styles.listaDesplazable} contentContainerStyle={styles.contenidoDetalle} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {encabezado(
-          recetaOpinion ? `Opiniones: ${recetaOpinion.nombre}` : 'Opiniones de la comunidad',
-          'Califica la receta o cuéntanos qué te pareció la aplicación.',
-        )}
-        <View style={styles.resumenOpiniones}>
-          <Text style={styles.estrellasResumen}>{promedioOpiniones ? `${'★'.repeat(Math.round(promedioOpiniones))}${'☆'.repeat(5 - Math.round(promedioOpiniones))}` : '☆☆☆☆☆'}</Text>
-          <Text style={styles.promedioOpiniones}>{promedioOpiniones ? `${promedioOpiniones} de 5` : 'Sé la primera opinión'}</Text>
-          <Text style={styles.textoSecundario}>{opiniones.length} {opiniones.length === 1 ? 'opinión' : 'opiniones'}</Text>
-        </View>
-
-        <View style={styles.seccionDetalle}>
-          <Text style={styles.tituloSeccion}>Comparte tu experiencia</Text>
-          <TextInput
-            value={nombreOpinion}
-            onChangeText={setNombreOpinion}
-            placeholder="Tu nombre (opcional)"
-            placeholderTextColor="#8B958B"
-            style={styles.campoFormulario}
-            maxLength={80}
-            accessibilityLabel="Tu nombre para la opinión"
-          />
-          <Text style={styles.etiquetaFormulario}>Tu calificación</Text>
-          <View style={styles.selectorEstrellas}>
-            {[1, 2, 3, 4, 5].map((estrella) => (
-              <TouchableOpacity
-                key={estrella}
-                onPress={() => setCalificacionOpinion(estrella)}
-                style={styles.botonEstrella}
-                accessibilityRole="button"
-                accessibilityLabel={`${estrella} ${estrella === 1 ? 'estrella' : 'estrellas'}`}
-                accessibilityState={{ selected: calificacionOpinion === estrella }}
-              >
-                <Text style={[styles.textoEstrella, estrella <= calificacionOpinion && styles.textoEstrellaActiva]}>{estrella <= calificacionOpinion ? '★' : '☆'}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <TextInput
-            value={textoOpinion}
-            onChangeText={setTextoOpinion}
-            placeholder="¿Qué te gustó? ¿Cambiarías algo? (10 a 600 caracteres)"
-            placeholderTextColor="#8B958B"
-            style={[styles.campoFormulario, styles.campoMultilinea]}
-            multiline
-            maxLength={600}
-            textAlignVertical="top"
-            accessibilityLabel="Escribe tu opinión"
-          />
-          <Text style={styles.contadorFormulario}>{textoOpinion.length}/600</Text>
-          {estadoOpinion ? <Text style={styles.estadoFormulario}>{estadoOpinion}</Text> : null}
+  const mostrarOpiniones = () => {
+    const opinionesGenerales = opiniones.filter((opinion) => !opinion.nombre_receta);
+    const opinionesRecetas = opiniones.filter((opinion) => Boolean(opinion.nombre_receta));
+    const opinionesVisibles = recetaOpinionNombre
+      ? opiniones
+      : seccionOpiniones === 'generales' ? opinionesGenerales : opinionesRecetas;
+    const promedioCalculado = opinionesVisibles.length
+      ? opinionesVisibles.reduce((total, opinion) => total + opinion.calificacion, 0) / opinionesVisibles.length
+      : 0;
+    const promedioVisible = recetaOpinionNombre && promedioOpiniones
+      ? promedioOpiniones
+      : promedioCalculado;
+    const selectorEstrellas = (origen: string) => (
+      <View style={styles.selectorEstrellas}>
+        {[1, 2, 3, 4, 5].map((estrella) => (
           <TouchableOpacity
-            style={[styles.botonPrincipal, (enviandoOpinion || textoOpinion.trim().length < 10) && styles.botonDeshabilitado]}
-            onPress={enviarOpinion}
-            disabled={enviandoOpinion || textoOpinion.trim().length < 10}
+            key={`${origen}-${estrella}`}
+            onPress={() => setCalificacionOpinion(estrella)}
+            style={styles.botonEstrella}
             accessibilityRole="button"
+            accessibilityLabel={`${origen}: calificar con ${estrella} ${estrella === 1 ? 'estrella' : 'estrellas'}`}
+            accessibilityState={{ selected: calificacionOpinion === estrella }}
           >
-            <Text style={styles.textoBotonPrincipal}>{enviandoOpinion ? 'Enviando opinión…' : 'Publicar opinión'}</Text>
+            <Text style={[styles.textoEstrella, estrella <= calificacionOpinion && styles.textoEstrellaActiva]}>{estrella <= calificacionOpinion ? '★' : '☆'}</Text>
           </TouchableOpacity>
-          <Text style={styles.notaFormulario}>Tu opinión se guardará en la aplicación para ayudar a otras personas.</Text>
-        </View>
+        ))}
+      </View>
+    );
 
-        <Text style={styles.tituloSeccionLista}>Lo que comparte la comunidad</Text>
-        {cargandoOpiniones ? (
-          <ActivityIndicator color="#267348" style={styles.cargandoOpiniones} />
-        ) : opiniones.length ? opiniones.map((opinion) => (
-          <View key={opinion.id_opinion} style={styles.tarjetaOpinion}>
-            <View style={styles.filaOpinion}>
-              <Text style={styles.nombreOpinion}>{opinion.nombre_usuario || 'Anónimo'}</Text>
-              <Text style={styles.fechaOpinion}>{new Date(opinion.creado_en).toLocaleDateString('es-MX')}</Text>
+    return (
+      <View style={styles.contenedorPantalla}>
+        {botonRegreso('Volver', volver)}
+        <ScrollView
+          key={recetaOpinionNombre ? `opiniones-receta-${recetaOpinionNombre}` : `opiniones-${seccionOpiniones}`}
+          style={styles.listaDesplazable}
+          contentContainerStyle={styles.contenidoDetalle}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {encabezado(
+            recetaOpinionNombre ? `Opiniones: ${recetaOpinionNombre}` : 'Opiniones de la comunidad',
+            recetaOpinionNombre ? 'Lee comentarios y comparte tu calificación para esta receta.' : 'Consulta por separado las opiniones generales y las de cada receta.',
+          )}
+          {recetaOpinion ? (
+            <View style={styles.seccionDetalle}>
+              <Text style={styles.tituloSeccion}>{recetaOpinion.emoji}  {recetaOpinion.nombre}</Text>
+              <Text style={styles.textoSecundario}>{recetaOpinion.descripcion}</Text>
+              <TouchableOpacity
+                style={styles.botonDetalle}
+                onPress={abrirRecetaDesdeOpiniones}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Ver receta completa de ${recetaOpinion.nombre}`}
+              >
+                <Text style={styles.textoBotonDetalle}>Ver receta completa y preparación →</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.estrellasOpinion}>{'★'.repeat(opinion.calificacion)}{'☆'.repeat(5 - opinion.calificacion)}</Text>
-            <Text style={styles.comentarioOpinion}>{opinion.comentario}</Text>
+          ) : null}
+          {!recetaOpinionNombre ? (
+            <View style={styles.tabsOpiniones}>
+              {(['generales', 'recetas'] as const).map((seccion) => (
+                <TouchableOpacity
+                  key={seccion}
+                  style={[styles.tabOpinion, seccionOpiniones === seccion && styles.tabOpinionActivo]}
+                  onPress={() => setSeccionOpiniones(seccion)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: seccionOpiniones === seccion }}
+                >
+                  <Text style={[styles.textoTabOpinion, seccionOpiniones === seccion && styles.textoTabOpinionActivo]}>
+                    {seccion === 'generales' ? `Generales (${opinionesGenerales.length})` : `De recetas (${opinionesRecetas.length})`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Comparte tu experiencia</Text>
+            <Text style={styles.etiquetaFormulario}>Elige tu calificación</Text>
+            {selectorEstrellas('Primera calificación')}
+            <Text style={styles.promedioOpiniones}>Tu selección: {calificacionOpinion} de 5</Text>
+            <TextInput
+              value={nombreOpinion}
+              onChangeText={setNombreOpinion}
+              placeholder="Tu nombre (opcional)"
+              placeholderTextColor="#8B958B"
+              style={styles.campoFormulario}
+              maxLength={80}
+              accessibilityLabel="Tu nombre para la opinión"
+            />
+            <Text style={styles.etiquetaFormulario}>Tu calificación</Text>
+            {selectorEstrellas('Segunda calificación')}
+            <Text style={styles.notaFormulario}>Calificación elegida: {calificacionOpinion}/5. Al publicar, aparecerá junto a tu opinión.</Text>
+            <TextInput
+              value={textoOpinion}
+              onChangeText={setTextoOpinion}
+              placeholder="¿Qué te gustó? ¿Cambiarías algo? (10 a 600 caracteres)"
+              placeholderTextColor="#8B958B"
+              style={[styles.campoFormulario, styles.campoMultilinea]}
+              multiline
+              maxLength={600}
+              textAlignVertical="top"
+              accessibilityLabel="Escribe tu opinión"
+            />
+            <Text style={styles.contadorFormulario}>{textoOpinion.length}/600</Text>
+            {estadoOpinion ? <Text style={styles.estadoFormulario}>{estadoOpinion}</Text> : null}
+            <TouchableOpacity
+              style={[styles.botonPrincipal, (enviandoOpinion || textoOpinion.trim().length < 10) && styles.botonDeshabilitado]}
+              onPress={enviarOpinion}
+              disabled={enviandoOpinion || textoOpinion.trim().length < 10}
+              accessibilityRole="button"
+            >
+              <Text style={styles.textoBotonPrincipal}>{enviandoOpinion ? 'Enviando opinión…' : 'Publicar opinión'}</Text>
+            </TouchableOpacity>
+            <Text style={styles.notaFormulario}>Tu opinión se guardará en la aplicación para ayudar a otras personas.</Text>
           </View>
-        )) : (
-          <Text style={styles.textoSinOpiniones}>{estadoOpinion || 'Todavía no hay opiniones. ¡Puedes iniciar la conversación!'}</Text>
-        )}
-      </ScrollView>
-    </View>
-  );
+
+          <Text style={styles.tituloSeccionLista}>
+            {recetaOpinionNombre ? `Opiniones de ${recetaOpinionNombre}` : seccionOpiniones === 'generales' ? 'Opiniones generales de la aplicación' : 'Opiniones vinculadas a recetas'}
+          </Text>
+          <Text style={styles.textoSecundario}>
+            {promedioVisible ? `Promedio: ${promedioVisible.toFixed(1)} de 5 · ` : ''}
+            {opinionesVisibles.length} {opinionesVisibles.length === 1 ? 'opinión' : 'opiniones'}
+          </Text>
+          {cargandoOpiniones ? (
+            <ActivityIndicator color="#267348" style={styles.cargandoOpiniones} />
+          ) : opinionesVisibles.length ? opinionesVisibles.map((opinion) => (
+            <TouchableOpacity
+              key={opinion.id_opinion}
+              style={styles.tarjetaOpinion}
+              onPress={() => abrirOpinionSeleccionada(opinion)}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={opinion.nombre_receta ? `Abrir opiniones de ${opinion.nombre_receta}` : 'Abrir opiniones generales'}
+            >
+              <View style={styles.filaOpinion}>
+                <Text style={styles.nombreOpinion}>{opinion.nombre_usuario || 'Anónimo'}</Text>
+                <Text style={styles.fechaOpinion}>{new Date(opinion.creado_en).toLocaleDateString('es-MX')}</Text>
+              </View>
+              <Text style={styles.estrellasOpinion}>{'★'.repeat(opinion.calificacion)}{'☆'.repeat(5 - opinion.calificacion)} · {opinion.calificacion}/5</Text>
+              {opinion.nombre_receta ? <Text style={styles.etiquetaRecetaOpinion}>Receta: {opinion.nombre_receta} · Ver opiniones →</Text> : <Text style={styles.etiquetaRecetaOpinion}>Opinión general · Ver opiniones →</Text>}
+              <Text style={styles.comentarioOpinion}>{opinion.comentario}</Text>
+            </TouchableOpacity>
+          )) : (
+            <Text style={styles.textoSinOpiniones}>{estadoOpinion || 'Todavía no hay opiniones en esta sección. ¡Puedes iniciar la conversación!'}</Text>
+          )}
+          {recetaOpinionNombre ? (
+            <TouchableOpacity style={styles.botonListaOpiniones} onPress={() => abrirListaOpiniones('recetas')} accessibilityRole="button">
+              <Text style={styles.textoBotonListaOpiniones}>Ver todas las opiniones de recetas →</Text>
+            </TouchableOpacity>
+          ) : null}
+        </ScrollView>
+      </View>
+    );
+  };
 
   const mostrarContacto = () => (
     <View style={styles.contenedorPantalla}>
@@ -1109,6 +1315,9 @@ export default function App() {
             maxLength={254}
             accessibilityLabel="Correo electrónico para responder"
           />
+          {correoContacto.trim() && !correoContactoValido ? (
+            <Text style={styles.errorValidacion}>Escribe un correo válido o déjalo vacío.</Text>
+          ) : null}
           <TextInput
             value={mensajeContacto}
             onChangeText={setMensajeContacto}
@@ -1124,9 +1333,9 @@ export default function App() {
           <Text style={styles.notaFormulario}>El mensaje y el correo opcional se guardan en el servidor del proyecto para su seguimiento.</Text>
           {estadoContacto ? <Text style={styles.estadoFormulario}>{estadoContacto}</Text> : null}
           <TouchableOpacity
-            style={[styles.botonPrincipal, (enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2) && styles.botonDeshabilitado]}
+            style={[styles.botonPrincipal, (enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2 || !correoContactoValido) && styles.botonDeshabilitado]}
             onPress={enviarContacto}
-            disabled={enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2}
+            disabled={enviandoContacto || mensajeContacto.trim().length < 10 || nombreContacto.trim().length < 2 || !correoContactoValido}
             accessibilityRole="button"
           >
             <Text style={styles.textoBotonPrincipal}>{enviandoContacto ? 'Enviando mensaje…' : 'Enviar mensaje'}</Text>
@@ -1140,9 +1349,11 @@ export default function App() {
     if (!recetaSeleccionada) {
       return (
         <View style={styles.contenedorPantalla}>
-          {botonRegreso('Volver a recetas', () =>
-            setPantalla('resultados'),
-          )}
+          {botonRegreso('Volver a recetas', () => {
+            setRecetaSeleccionada(null);
+            setPantallaAnterior('inicio');
+            setPantalla('inicio');
+          })}
 
           <Text style={styles.textoMensajeVacio}>
             No se ha seleccionado ninguna receta.
@@ -1151,25 +1362,56 @@ export default function App() {
       );
     }
 
+    const recetaActual = crearResultadoLocal(recetaSeleccionada);
+
     return (
-      <View style={styles.contenedorPantalla}>
-        {botonRegreso('Volver a recetas', volver)}
+      <View key={`detalle-receta-${recetaSeleccionada.id}`} style={styles.contenedorPantalla}>
+        {botonRegreso('Volver a inicio', volver)}
 
         <ScrollView
+          ref={detalleScrollRef}
+          key={`detalle-receta-${recetaSeleccionada.id}`}
+          contentOffset={{ x: 0, y: 0 }}
+          onContentSizeChange={() => {
+            if (scrollPendienteRecetaRef.current !== recetaSeleccionada.id) return;
+            detalleScrollRef.current?.scrollTo({ x: 0, y: 0, animated: false });
+            scrollPendienteRecetaRef.current = null;
+          }}
           style={styles.listaDesplazable}
           contentContainerStyle={styles.contenidoDetalle}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.heroDetalleReceta}>
-            <Text style={styles.emojiDetalleReceta}>{recetaSeleccionada.emoji}</Text>
+            <Text style={styles.emojiDetalleReceta}>{recetaActual.emoji}</Text>
             <View style={styles.textoHeroDetalle}>
-              <Text style={styles.categoriaDetalle}>{ICONO_CATEGORIA[recetaSeleccionada.categoria]} {recetaSeleccionada.categoria}</Text>
-              <Text style={styles.tituloDetalle}>{recetaSeleccionada.nombre}</Text>
+              <Text style={styles.categoriaDetalle}>{ICONO_CATEGORIA[recetaActual.categoria]} {recetaActual.categoria}</Text>
+              <Text style={styles.tituloDetalle}>{recetaActual.nombre}</Text>
             </View>
           </View>
 
+          <View style={styles.seccionDetalle}>
+            <Text style={styles.tituloSeccion}>Necesitas antes de cocinar</Text>
+            <Text style={styles.textoSecundario}>Revisa estos utensilios y equipos antes de empezar; así sabrás desde el inicio si tienes todo a la mano.</Text>
+            <Text style={styles.subtituloListaRecursos}>Equipos y dispositivos</Text>
+            {recetaActual.equipos.length > 0 ? (
+              recetaActual.equipos.map((equipo) => (
+                <Text key={equipo} style={styles.elementoLista}>• {equipo}</Text>
+              ))
+            ) : (
+              <Text style={styles.textoSecundario}>No requiere equipos eléctricos específicos.</Text>
+            )}
+            <Text style={styles.subtituloListaRecursos}>Utensilios</Text>
+            {recetaActual.utensilios.length > 0 ? (
+              recetaActual.utensilios.map((utensilio) => (
+                <Text key={utensilio} style={styles.elementoLista}>• {utensilio}</Text>
+              ))
+            ) : (
+              <Text style={styles.textoSecundario}>No hay utensilios adicionales registrados.</Text>
+            )}
+          </View>
+
           <Text style={styles.descripcionDetalle}>
-            {recetaSeleccionada.descripcion}
+            {recetaActual.descripcion}
           </Text>
 
           <View style={styles.tarjetaDatosDetalle}>
@@ -1177,21 +1419,21 @@ export default function App() {
               <Text style={styles.iconoDato}>⏱</Text>
               <Text style={styles.etiquetaDato}>Tiempo</Text>
               <Text style={styles.valorDato}>
-                {recetaSeleccionada.tiempoMin} min
+                {recetaActual.tiempoMin} min
               </Text>
             </View>
 
             <View style={styles.datoDetalle}>
               <Text style={styles.iconoDato}>🍽️</Text>
               <Text style={styles.etiquetaDato}>Porciones</Text>
-              <Text style={styles.valorDato}>{recetaSeleccionada.porciones}</Text>
+              <Text style={styles.valorDato}>{recetaActual.porciones}</Text>
             </View>
 
             <View style={styles.datoDetalle}>
               <Text style={styles.iconoDato}>👨‍🍳</Text>
               <Text style={styles.etiquetaDato}>Dificultad</Text>
               <Text style={styles.valorDato}>
-                {recetaSeleccionada.dificultad}
+                {recetaActual.dificultad}
               </Text>
             </View>
 
@@ -1199,24 +1441,30 @@ export default function App() {
               <Text style={styles.iconoDato}>✓</Text>
               <Text style={styles.etiquetaDato}>Coincidencia</Text>
               <Text style={styles.valorDato}>
-                {ingredientesSeleccionados.length ? `${recetaSeleccionada.porcentaje}%` : 'Sin comparar'}
+                {ingredientesSeleccionados.length ? `${recetaActual.porcentaje}%` : 'Sin comparar'}
               </Text>
             </View>
           </View>
 
+          {recetaActual.esAlcoholica ? (
+            <View style={styles.avisoAlcoholico}>
+              <Text style={styles.textoAvisoAlcoholico}>Bebida con alcohol. Solo para mayores de edad; no conduzcas después de consumirla.</Text>
+            </View>
+          ) : null}
+
           <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Ingredientes</Text>
-            <Text style={styles.textoSecundario}>Cantidades para {recetaSeleccionada.porciones} porciones. Toca un ingrediente cuando ya lo tengas listo.</Text>
+            <Text style={styles.textoSecundario}>Cantidades para {recetaActual.porciones} porciones. Marca lo que tienes y desmárcalo cuando se te termine; el faltante y la coincidencia se actualizan al instante.</Text>
 
-            {recetaSeleccionada.ingredientes.map((ingrediente) => {
-              const loTienes = recetaSeleccionada.disponibles.includes(ingrediente.nombre);
-              const revisado = ingredientesRevisados.includes(ingrediente.nombre);
+            {recetaActual.ingredientes.map((ingrediente) => {
+              const loTienes = ingredientesSeleccionados.includes(ingrediente.nombre);
+              const revisado = loTienes;
               const pendiente = ingredientesSeleccionados.length > 0 && !loTienes;
               return (
                 <TouchableOpacity
                   key={ingrediente.nombre}
                   style={styles.filaIngredienteDetalle}
-                  onPress={() => alternarIngredienteRevisado(ingrediente.nombre)}
+                  onPress={() => alternarIngrediente(ingrediente.nombre)}
                   activeOpacity={0.72}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: revisado }}
@@ -1225,8 +1473,8 @@ export default function App() {
                   <View style={styles.infoIngredienteChecklist}>
                     <Text style={[styles.cajaChecklist, revisado && styles.cajaChecklistActiva]}>{revisado ? '✓' : loTienes ? '•' : '＋'}</Text>
                     <View style={styles.contenidoIngrediente}>
-                      <Text style={[styles.elementoLista, pendiente && styles.elementoFaltante, revisado && styles.textoTachado]}>{ingrediente.nombre}</Text>
-                      <Text style={styles.categoriaDetalleIngrediente}>{ingrediente.categoria} · {revisado ? 'listo' : ingredientesSeleccionados.length === 0 ? 'ingrediente' : loTienes ? 'lo tienes' : 'te falta'}</Text>
+                      <Text style={[styles.elementoLista, pendiente && styles.elementoFaltante]}>{ingrediente.nombre}</Text>
+                      <Text style={styles.categoriaDetalleIngrediente}>{ingrediente.categoria} · {loTienes ? 'lo tienes' : 'te falta'}</Text>
                     </View>
                   </View>
                   <Text style={styles.cantidadIngrediente}>{ingrediente.cantidad}</Text>
@@ -1240,8 +1488,8 @@ export default function App() {
 
             {ingredientesSeleccionados.length === 0 ? (
               <Text style={styles.textoSecundario}>Selecciona lo que tienes en casa desde “Buscar con mis ingredientes” para comparar esta receta.</Text>
-            ) : recetaSeleccionada.faltantes.length > 0 ? (
-              recetaSeleccionada.faltantes.map((ingrediente) => (
+            ) : recetaActual.faltantes.length > 0 ? (
+              recetaActual.faltantes.map((ingrediente) => (
                 <Text key={ingrediente} style={styles.elementoFaltante}>
                   • {ingrediente}
                 </Text>
@@ -1259,14 +1507,14 @@ export default function App() {
                 <Text style={styles.tituloSeccion}>Preparación paso a paso</Text>
                 <Text style={styles.textoSecundario}>Toca cada paso cuando lo termines.</Text>
               </View>
-              <Text style={styles.progresoPasos}>{pasosCompletados.length}/{recetaSeleccionada.preparacion.length}</Text>
+              <Text style={styles.progresoPasos}>{pasosCompletados.length}/{recetaActual.preparacion.length}</Text>
             </View>
             <View style={styles.fondoProgresoPasos}>
-              <View style={[styles.barraProgresoPasos, { width: `${recetaSeleccionada.preparacion.length ? (pasosCompletados.length / recetaSeleccionada.preparacion.length) * 100 : 0}%` }]} />
+              <View style={[styles.barraProgresoPasos, { width: `${recetaActual.preparacion.length ? (pasosCompletados.length / recetaActual.preparacion.length) * 100 : 0}%` }]} />
             </View>
-            {recetaSeleccionada.preparacion.map((paso, indice) => (
+            {recetaActual.preparacion.map((paso, indice) => (
               <TouchableOpacity
-                key={`${recetaSeleccionada.id}-paso-${indice}`}
+                key={`${recetaActual.id}-paso-${indice}`}
                 style={[styles.filaPaso, pasosCompletados.includes(indice) && styles.filaPasoCompletada]}
                 onPress={() => alternarPaso(indice)}
                 activeOpacity={0.75}
@@ -1280,26 +1528,16 @@ export default function App() {
             ))}
           </View>
 
-          {recetaSeleccionada.consejo ? (
+          {recetaActual.consejo ? (
             <View style={styles.tarjetaConsejo}>
               <Text style={styles.tituloConsejo}>👩‍🍳 Consejo de cocina</Text>
-              <Text style={styles.textoConsejo}>{recetaSeleccionada.consejo}</Text>
+              <Text style={styles.textoConsejo}>{recetaActual.consejo}</Text>
             </View>
           ) : null}
 
-          <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>Utensilios necesarios</Text>
-
-            {recetaSeleccionada.utensilios.map((utensilio) => (
-              <Text key={utensilio} style={styles.elementoLista}>
-                • {utensilio}
-              </Text>
-            ))}
-          </View>
-
-          {recetaSeleccionada.fuenteUrl && (
+          {recetaActual.fuenteUrl && (
             <TouchableOpacity
-              onPress={() => Linking.openURL(recetaSeleccionada.fuenteUrl!).catch(() =>
+              onPress={() => Linking.openURL(recetaActual.fuenteUrl!).catch(() =>
                 Alert.alert('No se pudo abrir el enlace', 'Revisa tu conexión e inténtalo nuevamente.'),
               )}
               style={styles.botonFuente}
@@ -1310,32 +1548,12 @@ export default function App() {
             </TouchableOpacity>
           )}
 
-          <View style={styles.seccionDetalle}>
-            <Text style={styles.tituloSeccion}>
-              Equipos y dispositivos necesarios
-            </Text>
-
-            {recetaSeleccionada.equipos.length > 0 ? (
-              recetaSeleccionada.equipos.map((equipo) => (
-                <Text key={equipo} style={styles.elementoLista}>
-                  • {equipo}
-                </Text>
-              ))
-            ) : (
-              <Text style={styles.textoSecundario}>
-                Esta receta no requiere equipos eléctricos específicos.
-              </Text>
-            )}
-
-            <Text style={styles.notaDetalle}>
-              La aplicación indica los equipos necesarios para preparar la
-              receta, pero no comprueba si están disponibles en tu casa.
-            </Text>
-          </View>
-
           <TouchableOpacity
             style={styles.botonPrincipal}
-            onPress={() => setPantalla('ingredientes')}
+            onPress={() => {
+              setRecetaSeleccionada(null);
+              setPantalla('ingredientes');
+            }}
             activeOpacity={0.75}
             accessibilityRole="button"
           >
@@ -1346,7 +1564,7 @@ export default function App() {
 
           <TouchableOpacity
             style={styles.botonOpinionesDetalle}
-            onPress={() => abrirOpiniones(recetaSeleccionada)}
+            onPress={() => abrirOpiniones(recetaActual)}
             activeOpacity={0.75}
             accessibilityRole="button"
           >
@@ -1561,6 +1779,65 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
 
+  vistaPreviaCoincidencias: {
+    width: '100%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D8E6D2',
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 12,
+  },
+
+  tituloVistaPrevia: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#246B45',
+    marginBottom: 5,
+  },
+
+  textoVistaPrevia: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#58645A',
+    marginBottom: 7,
+  },
+
+  tarjetaVistaPrevia: {
+    backgroundColor: '#F4F8F1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginTop: 6,
+  },
+
+  filaVistaPrevia: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  nombreVistaPrevia: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#35473A',
+  },
+
+  porcentajeVistaPrevia: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#267348',
+  },
+
+  faltantesVistaPrevia: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#8B4B35',
+    marginTop: 4,
+  },
+
   botonLimpiar: {
     minHeight: 42,
     minWidth: 80,
@@ -1613,14 +1890,11 @@ const styles = StyleSheet.create({
   },
 
   listaIngredientes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     paddingBottom: 16,
   },
 
   botonIngrediente: {
-    width: '48%',
+    width: '100%',
     minHeight: 66,
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -1630,10 +1904,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D8E1D6',
-  },
-
-  botonIngredienteAncho: {
-    width: '31.5%',
   },
 
   ingredienteSeleccionado: {
@@ -1998,6 +2268,37 @@ const styles = StyleSheet.create({
     color: '#58645A',
   },
 
+  subtituloListaRecursos: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#58645A',
+    marginTop: 10,
+    marginBottom: 3,
+  },
+
+  notaAlcoholica: {
+    color: '#915221',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+
+  avisoAlcoholico: {
+    backgroundColor: '#FFF1DE',
+    borderColor: '#E9C28B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+
+  textoAvisoAlcoholico: {
+    color: '#794617',
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '600',
+  },
+
   notaDetalle: {
     fontSize: 13,
     lineHeight: 20,
@@ -2193,10 +2494,20 @@ const styles = StyleSheet.create({
   },
 
   botonAzar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    padding: 6,
+  },
+
+  dadoSorprendeme: {
+    fontSize: 19,
+  },
+
+  textoSorprendeme: {
     fontSize: 13,
     fontWeight: '700',
     color: '#246B45',
-    padding: 6,
   },
 
   filaDestacada: {
@@ -2609,6 +2920,49 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 
+  tabsOpiniones: {
+    flexDirection: 'row',
+    backgroundColor: '#EAF0E7',
+    borderRadius: 13,
+    padding: 4,
+    marginBottom: 12,
+  },
+
+  tabOpinion: {
+    flex: 1,
+    minHeight: 42,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+  },
+
+  tabOpinionActivo: {
+    backgroundColor: '#FFFFFF',
+  },
+
+  textoTabOpinion: {
+    color: '#647267',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  textoTabOpinionActivo: {
+    color: '#267348',
+  },
+
+  botonListaOpiniones: {
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+
+  textoBotonListaOpiniones: {
+    color: '#267348',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   estrellasResumen: {
     color: '#D59A26',
     fontSize: 25,
@@ -2685,6 +3039,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
+  errorValidacion: {
+    color: '#A43F35',
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: -5,
+    marginBottom: 8,
+  },
+
   notaFormulario: {
     color: '#778177',
     fontSize: 11,
@@ -2707,6 +3069,13 @@ const styles = StyleSheet.create({
     borderColor: '#E1E8DE',
     padding: 14,
     marginBottom: 10,
+  },
+
+  etiquetaRecetaOpinion: {
+    color: '#267348',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 5,
   },
 
   filaOpinion: {

@@ -173,9 +173,14 @@ router.post('/', async (req, res) => {
         a.nombre.localeCompare(b.nombre, 'es')
     );
 
+    const recomendacionesVisibles = recomendaciones.filter(
+      (receta) => receta.porcentajeCoincidencia >= 50,
+    );
+
     return res.json({
-      total: recomendaciones.length,
-      recomendaciones,
+      total: recomendacionesVisibles.length,
+      catalogoTotal: recomendaciones.length,
+      recomendaciones: recomendacionesVisibles,
     });
   } catch (error) {
     console.error('Error al generar recomendaciones:', error);
