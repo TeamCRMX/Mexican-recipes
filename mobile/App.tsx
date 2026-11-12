@@ -1253,24 +1253,38 @@ export default function App() {
           </Text>
           {cargandoOpiniones ? (
             <ActivityIndicator color="#267348" style={styles.cargandoOpiniones} />
-          ) : opinionesVisibles.length ? opinionesVisibles.map((opinion) => (
-            <TouchableOpacity
-              key={opinion.id_opinion}
-              style={styles.tarjetaOpinion}
-              onPress={() => abrirOpinionSeleccionada(opinion)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel={opinion.nombre_receta ? `Abrir opiniones de ${opinion.nombre_receta}` : 'Abrir opiniones generales'}
-            >
-              <View style={styles.filaOpinion}>
-                <Text style={styles.nombreOpinion}>{opinion.nombre_usuario || 'Anónimo'}</Text>
-                <Text style={styles.fechaOpinion}>{new Date(opinion.creado_en).toLocaleDateString('es-MX')}</Text>
+          ) : opinionesVisibles.length ? opinionesVisibles.map((opinion) => {
+            const contenido = (
+              <>
+                <View style={styles.filaOpinion}>
+                  <Text style={styles.nombreOpinion}>{opinion.nombre_usuario || 'Anónimo'}</Text>
+                  <Text style={styles.fechaOpinion}>{new Date(opinion.creado_en).toLocaleDateString('es-MX')}</Text>
+                </View>
+                <Text style={styles.estrellasOpinion}>{'★'.repeat(opinion.calificacion)}{'☆'.repeat(5 - opinion.calificacion)} · {opinion.calificacion}/5</Text>
+                {opinion.nombre_receta
+                  ? <Text style={styles.etiquetaRecetaOpinion}>Receta: {opinion.nombre_receta} · Ver opiniones →</Text>
+                  : <Text style={styles.etiquetaRecetaOpinion}>Opinión general</Text>}
+                <Text style={styles.comentarioOpinion}>{opinion.comentario}</Text>
+              </>
+            );
+
+            return opinion.nombre_receta ? (
+              <TouchableOpacity
+                key={opinion.id_opinion}
+                style={styles.tarjetaOpinion}
+                onPress={() => abrirOpinionSeleccionada(opinion)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel={`Abrir opiniones de ${opinion.nombre_receta}`}
+              >
+                {contenido}
+              </TouchableOpacity>
+            ) : (
+              <View key={opinion.id_opinion} style={styles.tarjetaOpinion}>
+                {contenido}
               </View>
-              <Text style={styles.estrellasOpinion}>{'★'.repeat(opinion.calificacion)}{'☆'.repeat(5 - opinion.calificacion)} · {opinion.calificacion}/5</Text>
-              {opinion.nombre_receta ? <Text style={styles.etiquetaRecetaOpinion}>Receta: {opinion.nombre_receta} · Ver opiniones →</Text> : <Text style={styles.etiquetaRecetaOpinion}>Opinión general · Ver opiniones →</Text>}
-              <Text style={styles.comentarioOpinion}>{opinion.comentario}</Text>
-            </TouchableOpacity>
-          )) : (
+            );
+          }) : (
             <Text style={styles.textoSinOpiniones}>{estadoOpinion || 'Todavía no hay opiniones en esta sección. ¡Puedes iniciar la conversación!'}</Text>
           )}
           {recetaOpinionNombre ? (
