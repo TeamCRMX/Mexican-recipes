@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../config/db.js';
+import { claveIngredienteGeneral } from '../utils/ingredientes.js';
 
 const router = Router();
 
@@ -30,7 +31,7 @@ router.post('/', async (req, res) => {
       if (/^\d+$/.test(valor) && Number.isSafeInteger(Number(valor)) && Number(valor) > 0) {
         idsSeleccionados.add(Number(valor));
       } else {
-        nombresSeleccionados.add(valor.toLocaleLowerCase('es-MX'));
+        nombresSeleccionados.add(claveIngredienteGeneral(valor));
       }
     } else {
       return res.status(400).json({
@@ -123,22 +124,23 @@ router.post('/', async (req, res) => {
     }
 
     const recomendaciones = Array.from(recetasMap.values()).map((receta) => {
-      const ingredientesDisponibles = receta.ingredientes.filter((ingrediente) =>
-        idsSeleccionados.has(ingrediente.id_ingrediente) ||
-        nombresSeleccionados.has(
-          ingrediente.nombre.toLocaleLowerCase('es-MX')
-        )
-      );
+      const gruposIngredientes = new Map<string, typeof receta.ingredientes>();
+      receta.ingredientes.forEach((ingrediente) => {
+        const clave = claveIngredienteGeneral(ingrediente.nombre);
+        const grupo = gruposIngredientes.get(clave) ?? [];
+        grupo.push(ingrediente);
+        gruposIngredientes.set(clave, grupo);
+      });
 
-      const ingredientesFaltantes = receta.ingredientes.filter(
-        (ingrediente) =>
-          !idsSeleccionados.has(ingrediente.id_ingrediente) &&
-          !nombresSeleccionados.has(
-            ingrediente.nombre.toLocaleLowerCase('es-MX')
-          )
+      const gruposCoincidentes = Array.from(gruposIngredientes.entries()).filter(([clave, grupo]) =>
+        nombresSeleccionados.has(clave) || grupo.some((ingrediente) => idsSeleccionados.has(ingrediente.id_ingrediente))
       );
-
-      const totalIngredientes = receta.ingredientes.length;
+      const gruposFaltantes = Array.from(gruposIngredientes.entries()).filter(([clave, grupo]) =>
+        !nombresSeleccionados.has(clave) && !grupo.some((ingrediente) => idsSeleccionados.has(ingrediente.id_ingrediente))
+      );
+      const ingredientesDisponibles = gruposCoincidentes.map(([, grupo]) => grupo[0]);
+      const ingredientesFaltantes = gruposFaltantes.map(([, grupo]) => grupo[0]);
+      const totalIngredientes = gruposIngredientes.size;
 
       const porcentajeCoincidencia = totalIngredientes === 0
         ? 0
@@ -174,7 +176,7 @@ router.post('/', async (req, res) => {
     );
 
     const recomendacionesVisibles = recomendaciones.filter(
-      (receta) => receta.porcentajeCoincidencia >= 50,
+      (receta) => receta.porcentajeCoincidencia > 0,
     );
 
     return res.json({

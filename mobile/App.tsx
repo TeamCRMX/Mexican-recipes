@@ -23,15 +23,27 @@ import {
   type CategoriaReceta,
   type Receta,
 } from './src/data/recetas';
+import { claveIngredienteGeneral, nombreIngredienteGeneral } from './src/data/ingredientes';
 import { BEBIDAS } from './src/data/bebidas';
 
 const CATALOGO_COMPLETO: Receta[] = [...RECETAS, ...BEBIDAS];
-const INGREDIENTES_CATALOGO = Array.from(
-  new Map(
-    CATALOGO_COMPLETO.flatMap((receta) => receta.ingredientes)
-      .map((ingrediente) => [ingrediente.nombre, { nombre: ingrediente.nombre, categoria: ingrediente.categoria }]),
-  ).values(),
-).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
+const ingredientesPorClave = new Map<string, { nombre: string; categoria: string; alternativas: Set<string> }>();
+CATALOGO_COMPLETO.flatMap((receta) => receta.ingredientes).forEach((ingrediente) => {
+  const nombre = nombreIngredienteGeneral(ingrediente.nombre);
+  const clave = claveIngredienteGeneral(ingrediente.nombre);
+  const existente = ingredientesPorClave.get(clave);
+  if (existente) {
+    existente.alternativas.add(ingrediente.nombre);
+  } else {
+    ingredientesPorClave.set(clave, {
+      nombre,
+      categoria: ingrediente.categoria,
+      alternativas: new Set([ingrediente.nombre]),
+    });
+  }
+});
+const INGREDIENTES_CATALOGO = Array.from(ingredientesPorClave.values())
+  .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
 const normalizarTexto = (valor: string) => valor
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -237,21 +249,26 @@ export default function App() {
   };
 
   const crearResultadoLocal = useCallback((receta: Receta): ResultadoReceta => {
-    const disponibles = receta.ingredientes
-      .filter((ingrediente) => ingredientesSeleccionados.includes(ingrediente.nombre))
-      .map((ingrediente) => ingrediente.nombre);
+    const ingredientesGenerales = Array.from(new Map(
+      receta.ingredientes.map((ingrediente) => [
+        claveIngredienteGeneral(ingrediente.nombre),
+        nombreIngredienteGeneral(ingrediente.nombre),
+      ] as const),
+    ).values());
+    const seleccionados = new Set(ingredientesSeleccionados.map(claveIngredienteGeneral));
+    const disponibles = ingredientesGenerales
+      .filter((nombre) => seleccionados.has(claveIngredienteGeneral(nombre)));
     const faltantes = ingredientesSeleccionados.length === 0
       ? []
-      : receta.ingredientes
-        .filter((ingrediente) => !ingredientesSeleccionados.includes(ingrediente.nombre))
-        .map((ingrediente) => ingrediente.nombre);
+      : ingredientesGenerales
+        .filter((nombre) => !seleccionados.has(claveIngredienteGeneral(nombre)));
 
     return {
       ...receta,
       id: -receta.id,
       porcentaje: ingredientesSeleccionados.length === 0
         ? 0
-        : Math.round((disponibles.length / receta.ingredientes.length) * 100),
+        : Math.round((disponibles.length / ingredientesGenerales.length) * 100),
       disponibles,
       faltantes,
     };
@@ -403,10 +420,9 @@ export default function App() {
 
   const ingredientesFiltrados = useMemo(() => {
     if (pantalla !== 'ingredientes') return [];
-    const busqueda = busquedaIngrediente.trim().toLocaleLowerCase('es-MX');
+    const busqueda = normalizarTexto(busquedaIngrediente.trim());
     return INGREDIENTES_CATALOGO.filter((ingrediente) =>
-      `${ingrediente.nombre} ${ingrediente.categoria}`
-        .toLocaleLowerCase('es-MX')
+      normalizarTexto(`${ingrediente.nombre} ${ingrediente.categoria} ${Array.from(ingrediente.alternativas).join(' ')}`)
         .includes(busqueda),
     );
   }, [busquedaIngrediente, pantalla]);
@@ -414,7 +430,7 @@ export default function App() {
   const vistaPreviaRecetas = useMemo(() => {
     if (pantalla !== 'ingredientes' || ingredientesSeleccionados.length === 0) return [];
     return CATALOGO_COMPLETO.map(crearResultadoLocal)
-      .filter((resultado) => resultado.porcentaje >= 50)
+      .filter((resultado) => resultado.porcentaje > 0)
       .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
   }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
 
@@ -483,7 +499,7 @@ export default function App() {
     return CATALOGO_COMPLETO.map((receta) => {
       return crearResultadoLocal(receta);
     })
-      .filter((resultado) => resultado.porcentaje >= 50)
+      .filter((resultado) => resultado.porcentaje > 0)
       .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
   }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
 
@@ -908,8 +924,8 @@ export default function App() {
             <Text style={styles.tituloVistaPrevia}>Vista previa de coincidencias</Text>
             <Text style={styles.textoVistaPrevia}>
               {vistaPreviaRecetas.length
-                ? `${vistaPreviaRecetas.length} ${vistaPreviaRecetas.length === 1 ? 'receta supera' : 'recetas superan'} el mínimo de 50%. La lista cambia al marcar o quitar ingredientes.`
-                : 'Aún no hay recetas con 50% de coincidencia. Selecciona otro ingrediente para ver opciones.'}
+                ? `${vistaPreviaRecetas.length} ${vistaPreviaRecetas.length === 1 ? 'receta coincide' : 'recetas coinciden'} con al menos uno de tus ingredientes. La lista cambia al marcar o quitar ingredientes.`
+                : 'Aún no hay recetas que incluyan tus ingredientes. Selecciona otro para ver más opciones.'}
             </Text>
             {vistaPreviaRecetas.slice(0, 4).map((receta) => (
               <TouchableOpacity
@@ -958,15 +974,14 @@ export default function App() {
               accessibilityRole="checkbox"
               accessibilityState={{ checked: seleccionado }}
             >
-              <Text
-                style={[
-                  styles.textoIngrediente,
-                  seleccionado && styles.textoIngredienteSeleccionado,
-                ]}
-              >
-                {seleccionado ? '✓  ' : '+  '}
-                {ingrediente.nombre}
-              </Text>
+              <View style={styles.filaBotonIngrediente}>
+                <View style={[styles.casillaIngrediente, seleccionado && styles.casillaIngredienteMarcada]}>
+                  {seleccionado ? <Text style={styles.marcaCasillaIngrediente}>✓</Text> : null}
+                </View>
+                <Text style={[styles.textoIngrediente, seleccionado && styles.textoIngredienteSeleccionado]}>
+                  {ingrediente.nombre}
+                </Text>
+              </View>
               <Text style={styles.categoriaIngrediente}>{ingrediente.categoria}</Text>
             </TouchableOpacity>
           );
@@ -1920,6 +1935,35 @@ const styles = StyleSheet.create({
     borderColor: '#D8E1D6',
   },
 
+  filaBotonIngrediente: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  casillaIngrediente: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#91A293',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  casillaIngredienteMarcada: {
+    borderColor: '#267348',
+    backgroundColor: '#267348',
+  },
+
+  marcaCasillaIngrediente: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+    lineHeight: 16,
+  },
+
   ingredienteSeleccionado: {
     backgroundColor: '#DFF1E2',
     borderColor: '#267348',
@@ -1927,6 +1971,7 @@ const styles = StyleSheet.create({
   },
 
   textoIngrediente: {
+    flex: 1,
     fontSize: 14,
     color: '#37433A',
     fontWeight: '500',
