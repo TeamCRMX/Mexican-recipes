@@ -50,6 +50,62 @@ const normalizarTexto = (valor: string) => valor
   .toLocaleLowerCase('es-MX');
 const TEXTO_BUSQUEDA_CACHE = new WeakMap<Receta, string>();
 
+type IngredienteGeneralizado = { clave: string; nombre: string };
+const INGREDIENTES_POR_RECETA = new WeakMap<Receta, IngredienteGeneralizado[]>();
+const RECETAS_POR_INGREDIENTE = new Map<string, Receta[]>();
+CATALOGO_COMPLETO.forEach((receta) => {
+  const porClave = new Map<string, string>();
+  receta.ingredientes.forEach((ingrediente) => {
+    const clave = claveIngredienteGeneral(ingrediente.nombre);
+    if (!porClave.has(clave)) porClave.set(clave, nombreIngredienteGeneral(ingrediente.nombre));
+  });
+  const ingredientes = Array.from(porClave, ([clave, nombre]) => ({ clave, nombre }));
+  INGREDIENTES_POR_RECETA.set(receta, ingredientes);
+  ingredientes.forEach(({ clave }) => {
+    const recetas = RECETAS_POR_INGREDIENTE.get(clave) ?? [];
+    recetas.push(receta);
+    RECETAS_POR_INGREDIENTE.set(clave, recetas);
+  });
+});
+
+type IngredienteCatalogo = {
+  nombre: string;
+  categoria: string;
+  alternativas: Set<string>;
+  textoBusqueda: string;
+};
+type IngredienteOpcionProps = {
+  ingrediente: IngredienteCatalogo;
+  seleccionado: boolean;
+  onAlternar: (nombre: string) => void;
+};
+const IngredienteOpcion = React.memo(({
+  ingrediente,
+  seleccionado,
+  onAlternar,
+}: IngredienteOpcionProps) => (
+  <TouchableOpacity
+    onPress={() => onAlternar(ingrediente.nombre)}
+    style={[
+      styles.botonIngrediente,
+      seleccionado && styles.ingredienteSeleccionado,
+    ]}
+    activeOpacity={0.7}
+    accessibilityRole="checkbox"
+    accessibilityState={{ checked: seleccionado }}
+  >
+    <View style={styles.filaBotonIngrediente}>
+      <View style={[styles.casillaIngrediente, seleccionado && styles.casillaIngredienteMarcada]}>
+        {seleccionado ? <Text style={styles.marcaCasillaIngrediente}>✓</Text> : null}
+      </View>
+      <Text style={[styles.textoIngrediente, seleccionado && styles.textoIngredienteSeleccionado]}>
+        {ingrediente.nombre}
+      </Text>
+    </View>
+    <Text style={styles.categoriaIngrediente}>{ingrediente.categoria}</Text>
+  </TouchableOpacity>
+));
+
 type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
 type Opinion = {
@@ -266,7 +322,7 @@ export default function App() {
     };
   }, [pantalla, recetaSeleccionada?.id]);
 
-  const alternarIngrediente = (ingrediente: string) => {
+  const alternarIngrediente = useCallback((ingrediente: string) => {
     setIngredientesSeleccionados((actuales) => {
       if (actuales.includes(ingrediente)) {
         return actuales.filter((item) => item !== ingrediente);
@@ -274,27 +330,31 @@ export default function App() {
 
       return [...actuales, ingrediente];
     });
-  };
+  }, []);
 
   const limpiarIngredientes = () => {
     setIngredientesSeleccionados([]);
     setBusquedaIngrediente('');
   };
 
+  const ingredientesSeleccionadosSet = useMemo(
+    () => new Set(ingredientesSeleccionados.map(claveIngredienteGeneral)),
+    [ingredientesSeleccionados],
+  );
+
   const crearResultadoLocal = useCallback((receta: Receta): ResultadoReceta => {
-    const ingredientesGenerales = Array.from(new Map(
+    const ingredientesGenerales = INGREDIENTES_POR_RECETA.get(receta) ?? Array.from(new Map(
       receta.ingredientes.map((ingrediente) => [
         claveIngredienteGeneral(ingrediente.nombre),
         nombreIngredienteGeneral(ingrediente.nombre),
       ] as const),
-    ).values());
-    const seleccionados = new Set(ingredientesSeleccionados.map(claveIngredienteGeneral));
+    ), ([clave, nombre]) => ({ clave, nombre }));
     const disponibles = ingredientesGenerales
-      .filter((nombre) => seleccionados.has(claveIngredienteGeneral(nombre)));
+      .filter((ingrediente) => ingredientesSeleccionadosSet.has(ingrediente.clave));
     const faltantes = ingredientesSeleccionados.length === 0
       ? []
       : ingredientesGenerales
-        .filter((nombre) => !seleccionados.has(claveIngredienteGeneral(nombre)));
+        .filter((ingrediente) => !ingredientesSeleccionadosSet.has(ingrediente.clave));
 
     return {
       ...receta,
@@ -302,10 +362,10 @@ export default function App() {
       porcentaje: ingredientesSeleccionados.length === 0
         ? 0
         : Math.round((disponibles.length / ingredientesGenerales.length) * 100),
-      disponibles,
-      faltantes,
+      disponibles: disponibles.map((ingrediente) => ingrediente.nombre),
+      faltantes: faltantes.map((ingrediente) => ingrediente.nombre),
     };
-  }, [ingredientesSeleccionados]);
+  }, [ingredientesSeleccionados.length, ingredientesSeleccionadosSet]);
 
   const buscarRecetas = async () => {
     if (ingredientesSeleccionados.length === 0) {
@@ -470,24 +530,43 @@ export default function App() {
         });
       }
     });
-    return Array.from(unificados.values()).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
+    return Array.from(unificados.values())
+      .map((ingrediente) => ({
+        ...ingrediente,
+        textoBusqueda: normalizarTexto(
+          `${ingrediente.nombre} ${ingrediente.categoria} ${Array.from(ingrediente.alternativas).join(' ')}`,
+        ),
+      }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es-MX'));
   }, [ingredientesBaseDatos]);
 
   const ingredientesFiltrados = useMemo(() => {
     if (pantalla !== 'ingredientes') return [];
     const busqueda = normalizarTexto(busquedaIngrediente.trim());
-    return catalogoIngredientes.filter((ingrediente) =>
-      normalizarTexto(`${ingrediente.nombre} ${ingrediente.categoria} ${Array.from(ingrediente.alternativas).join(' ')}`)
-        .includes(busqueda),
-    );
+    if (!busqueda) return catalogoIngredientes;
+    return catalogoIngredientes.filter((ingrediente) => ingrediente.textoBusqueda.includes(busqueda));
   }, [busquedaIngrediente, catalogoIngredientes, pantalla]);
 
-  const vistaPreviaRecetas = useMemo(() => {
-    if (pantalla !== 'ingredientes' || ingredientesSeleccionados.length === 0) return [];
-    return CATALOGO_COMPLETO.map(crearResultadoLocal)
+  const resultadosLocalesCoincidentes = useMemo(() => {
+    if (ingredientesSeleccionados.length === 0) return [];
+    const candidatas = new Set<Receta>();
+    ingredientesSeleccionadosSet.forEach((clave) => {
+      RECETAS_POR_INGREDIENTE.get(clave)?.forEach((receta) => candidatas.add(receta));
+    });
+    return Array.from(candidatas, crearResultadoLocal)
       .filter((resultado) => resultado.porcentaje >= 50)
       .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
-  }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
+  }, [crearResultadoLocal, ingredientesSeleccionados.length, ingredientesSeleccionadosSet]);
+
+  const vistaPreviaRecetas = pantalla === 'ingredientes' ? resultadosLocalesCoincidentes : [];
+
+  const renderOpcionIngrediente = useCallback(({ item }: { item: IngredienteCatalogo }) => (
+    <IngredienteOpcion
+      ingrediente={item}
+      seleccionado={ingredientesSeleccionadosSet.has(claveIngredienteGeneral(item.nombre))}
+      onAlternar={alternarIngrediente}
+    />
+  ), [alternarIngrediente, ingredientesSeleccionadosSet]);
 
   const busquedaCatalogoNormalizada = normalizarTexto(busquedaCatalogo.trim());
   const ingredienteFiltroNormalizado = normalizarTexto(ingredienteFiltro.trim());
@@ -550,13 +629,8 @@ export default function App() {
   ]);
 
   const resultadosRecomendados = useMemo(() => {
-    if (pantalla !== 'resultados' || ingredientesSeleccionados.length === 0) return [];
-    return CATALOGO_COMPLETO.map((receta) => {
-      return crearResultadoLocal(receta);
-    })
-      .filter((resultado) => resultado.porcentaje >= 50)
-      .sort((a, b) => b.porcentaje - a.porcentaje || a.nombre.localeCompare(b.nombre, 'es-MX'));
-  }, [crearResultadoLocal, ingredientesSeleccionados.length, pantalla]);
+    return pantalla === 'resultados' ? resultadosLocalesCoincidentes : [];
+  }, [pantalla, resultadosLocalesCoincidentes]);
 
   const correoContactoValido = !correoContacto.trim()
     || (correoContacto.trim().length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correoContacto.trim()));
@@ -1015,33 +1089,7 @@ export default function App() {
             No hay ingredientes con ese nombre. Prueba otra búsqueda.
           </Text>
         )}
-        renderItem={({ item: ingrediente }) => {
-          const seleccionado =
-            ingredientesSeleccionados.includes(ingrediente.nombre);
-
-          return (
-            <TouchableOpacity
-              onPress={() => alternarIngrediente(ingrediente.nombre)}
-              style={[
-                styles.botonIngrediente,
-                seleccionado && styles.ingredienteSeleccionado,
-              ]}
-              activeOpacity={0.7}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: seleccionado }}
-            >
-              <View style={styles.filaBotonIngrediente}>
-                <View style={[styles.casillaIngrediente, seleccionado && styles.casillaIngredienteMarcada]}>
-                  {seleccionado ? <Text style={styles.marcaCasillaIngrediente}>✓</Text> : null}
-                </View>
-                <Text style={[styles.textoIngrediente, seleccionado && styles.textoIngredienteSeleccionado]}>
-                  {ingrediente.nombre}
-                </Text>
-              </View>
-              <Text style={styles.categoriaIngrediente}>{ingrediente.categoria}</Text>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={renderOpcionIngrediente}
       />
 
       <View style={styles.piePantalla}>
