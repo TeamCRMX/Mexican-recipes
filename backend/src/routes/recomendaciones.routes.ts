@@ -176,7 +176,7 @@ router.post('/', async (req, res) => {
     );
 
     const recomendacionesVisibles = recomendaciones.filter(
-      (receta) => receta.porcentajeCoincidencia > 0,
+      (receta) => receta.porcentajeCoincidencia >= 50,
     );
 
     return res.json({
