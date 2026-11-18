@@ -198,6 +198,11 @@ const fetchConTiempo = async (url: string, init?: RequestInit) => {
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('El servidor tardó demasiado en responder. Revisa tu conexión e inténtalo de nuevo.');
+    }
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
@@ -488,11 +493,8 @@ export default function App() {
     setCatalogoLocal(true);
     setPantalla('resultados');
 
-    const controlador = new AbortController();
-    const temporizador = setTimeout(() => controlador.abort(), 6000);
-
     try {
-      const respuesta = await fetch(
+      const respuesta = await fetchConTiempo(
         `${getBackendUrl()}/api/recomendaciones`,
         {
           method: 'POST',
@@ -500,7 +502,6 @@ export default function App() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ ingredientes: ingredientesSeleccionados }),
-          signal: controlador.signal,
         },
       );
 
@@ -518,8 +519,6 @@ export default function App() {
       setCatalogoLocal(catalogoTotal < CATALOGO_COMPLETO.length);
     } catch {
       // Las recomendaciones locales ya están visibles; la sincronización es opcional.
-    } finally {
-      clearTimeout(temporizador);
     }
   };
 
