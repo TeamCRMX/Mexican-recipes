@@ -8,7 +8,9 @@ const normalizarTexto = (valor: string) => valor
 export const nombreIngredienteGeneral = (nombre: string) => {
   const n = normalizarTexto(nombre);
 
-  if (/^agua\b/.test(n) && !/^agua de (?:coco|jamaica|horchata|tamarindo|limon|fruta)/.test(n)) return 'Agua';
+  if (/^agua\b/.test(n) && !/^agua de (?:jamaica|horchata|tamarindo|limon|fruta)/.test(n)) return 'Agua';
+  if (/^caldo de (?:pollo|res|verduras?)$/.test(n)) return 'Agua';
+  if (/^aceitunas?(?: verdes?| negras?| verdes? o negras?)?$/.test(n)) return 'Aceitunas';
   if (/^(?:asiento o )?manteca(?: de (?:cerdo|puerco)| vegetal)?$/.test(n)) return 'Manteca';
   if (/frijol/.test(n)) return 'Frijoles';
   if (/^(?:huevo|clara de huevo(?: pasteurizada)?|yema de huevo)$/.test(n)) return 'Huevo';
@@ -25,10 +27,12 @@ export const nombreIngredienteGeneral = (nombre: string) => {
   if (/^(?:miel de maiz|miel)$/.test(n)) return 'Miel';
   if (/^(?:fecula de maiz|maicena)$/.test(n)) return 'Maicena';
   if (/^tomate verde$/.test(n)) return 'Tomate';
-  if (/^(?:jugo de limon|ralladura de limon|lima)$/.test(n)) return 'Limón';
+  if (/^(?:jugo de limon|ralladura de limon|lima|naranja agria o limon)$/.test(n)) return 'Limón';
   if (/^cascara de naranja$/.test(n)) return 'Naranja';
   if (/^(?:salsa de )?chile de arbol$/.test(n)) return 'Chile de árbol';
   if (/^(?:salsa verde|chiles en lata)$/.test(n)) return 'Chiles en lata';
+  if (/^salsa roja$/.test(n)) return 'Jitomate';
+  if (/^(?:salsa picante|salsa botanera|salsa de habanero|valentina|salsa valentina)$/.test(n)) return 'Salsa botanera';
   if (/^setas?$/.test(n)) return 'Champiñones';
   if (/^caldo de frijol$/.test(n)) return 'Frijoles';
   if (/^totopos?(?: de maiz)?$/.test(n)) return 'Tortillas de maíz';
@@ -46,7 +50,24 @@ export const nombreIngredienteGeneral = (nombre: string) => {
   if (/^mango maduro$/.test(n)) return 'Mango';
   if (/^nopales? limpios?$/.test(n)) return 'Nopal';
   if (/^platanos? machos?(?: maduros?)?$/.test(n)) return 'Plátano macho';
-  if (/^calabaza(?: de castilla| cocida)?$/.test(n)) return 'Calabaza';
+  if (/^(?:calabazas?|calabacitas?)(?: de castilla| cocidas?)?$/.test(n)) return 'Calabaza';
+  if (/^camotes?(?: amarillos?)?$/.test(n)) return 'Camote';
+  if (/^cazon(?: cocido y desmenuzado)?$/.test(n)) return 'Cazón';
+  if (/^chorizos?(?: mexicanos?)?$/.test(n)) return 'Chorizo';
+  if (/^clavos?(?: de olor| molidos?)?$/.test(n)) return 'Clavo de olor';
+  if (/^garbanzos?(?: cocidos)?$/.test(n)) return 'Garbanzos';
+  if (/^harina$/.test(n)) return 'Harina de trigo';
+  if (/^hojas? de maiz(?: secas?)?$/.test(n)) return 'Hojas de maíz';
+  if (/^mantequilla(?: fria)?$/.test(n)) return 'Mantequilla';
+  if (/^pan de caja$/.test(n)) return 'Pan blanco';
+  if (/^papas? cambray$/.test(n)) return 'Papa';
+  if (/^pepitas? de calabaza$/.test(n)) return 'Pepitas de calabaza';
+  if (/^pepitas?$/.test(n) || /^pepitas? de girasol$/.test(n)) return 'Pepitas de girasol';
+  if (/^pimienta molida$/.test(n) || /^pimienta negra molida$/.test(n)) return 'Pimienta molida';
+  if (/^oregano molido$/.test(n)) return 'Orégano molido';
+  if (/^(?:quesillo|queso oaxaca)$/.test(n)) return 'Quesillo';
+  if (/^rabano(?:s)?$/.test(n)) return 'Rábano';
+  if (/^sopes? de maiz$/.test(n)) return 'Masa de maíz';
   if (/^papas?$/.test(n)) return 'Papa';
   if (/^arroz blanco$/.test(n)) return 'Arroz';
   if (/^amaranto inflado$/.test(n)) return 'Amaranto';
@@ -62,7 +83,7 @@ export const nombreIngredienteGeneral = (nombre: string) => {
   if (/^ajonjoli(?: tostado)?$/.test(n)) return 'Ajonjolí';
   if (/^amaranto(?: inflado)?$/.test(n)) return 'Amaranto';
   if (/^nopal(?:es)?(?: limpio(?:s)?)?$/.test(n)) return 'Nopal';
-  if (/^calabaza(?: cocida)?$/.test(n)) return 'Calabaza';
+  if (/^(?:calabazas?|calabacitas?)(?: cocidas?)?$/.test(n)) return 'Calabaza';
   if (/^papas?$/.test(n)) return 'Papa';
   if (/^arroz(?: blanco)?$/.test(n)) return 'Arroz';
   if (/^mango(?: maduro)?$/.test(n)) return 'Mango';
@@ -76,8 +97,8 @@ export const nombreIngredienteGeneral = (nombre: string) => {
     return `Mermelada de ${sabor}`;
   }
   if (/^vinagre de manzana$/.test(n)) return 'Vinagre de manzana';
-  if (/^vinagre blanco$/.test(n)) return 'Vinagre blanco';
-  if (/^vinagre(?:\s+.*)?$/.test(n)) return 'Vinagre';
+  if (/^(?:vinagre blanco|vinagre)$/.test(n)) return 'Vinagre blanco';
+  if (/^vinagre(?:\s+.*)?$/.test(n)) return 'Vinagre blanco';
   if (/^canela en raja$/.test(n)) return 'Canela';
 
   return nombre.trim()

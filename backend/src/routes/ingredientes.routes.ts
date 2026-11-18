@@ -6,9 +6,10 @@ const router = Router();
 router.get('/', async (_req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id_ingrediente, nombre, categoria
-       FROM ingredientes
-       ORDER BY nombre ASC`
+      `SELECT DISTINCT i.id_ingrediente, i.nombre, i.categoria
+       FROM ingredientes i
+       INNER JOIN receta_ingrediente ri ON ri.id_ingrediente = i.id_ingrediente
+       ORDER BY i.nombre ASC`
     );
 
     res.json(result.rows);

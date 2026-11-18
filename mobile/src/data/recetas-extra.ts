@@ -67,7 +67,7 @@ export const RECETAS_EXTRA: Receta[] = [
   }),
   crearRecetaExtra({
     id: 41, nombre: 'Machaca con huevo', categoria: 'Desayuno', descripcion: 'Carne seca deshebrada con huevo, cebolla, chile y jitomate, al estilo norteño.', tiempoMin: 25, dificultad: 'Fácil', emoji: '🥩',
-    ingredientes: ['Machaca de res|150 g|Proteínas', 'Huevo|6 piezas|Proteínas', 'Jitomate|2 piezas|Verduras', 'Cebolla|1/2 pieza|Verduras', 'Chile serrano|1 pieza|Chiles', 'Aceite vegetal|1 cucharada|Despensa', 'Pimienta|al gusto|Especias', 'Tortillas de harina|8 piezas|Cereales'],
+    ingredientes: ['Machaca de res|150 g|Proteínas', 'Huevo|6 piezas|Proteínas', 'Jitomate|2 piezas|Verduras', 'Cebolla|1/2 pieza|Verduras', 'Chile serrano|1 pieza|Chiles', 'Aceite vegetal|1 cucharada|Despensa', 'Pimienta molida|al gusto|Especias', 'Tortillas de harina|8 piezas|Cereales'],
     preparacion: ['Desmenuza la machaca si viene en trozos. Pica jitomate, cebolla y chile; bate los huevos con pimienta y poca sal porque la carne seca ya suele ser salada.', 'Calienta el aceite en una sartén amplia y sofríe la cebolla con el chile hasta que se suavicen. Incorpora la machaca y muévela un minuto para que libere su aroma.', 'Añade el jitomate y cocina hasta que se ablande y reduzca parte de su jugo. Vierte los huevos y revuelve a fuego medio hasta que estén cocidos pero jugosos.', 'Prueba antes de añadir sal. Sirve de inmediato con tortillas de harina calientes, frijoles y salsa al gusto.'],
   }),
   crearRecetaExtra({
@@ -155,9 +155,9 @@ export const RECETAS_EXTRA: Receta[] = [
   }),
   crearRecetaExtra({
     id: 56, nombre: 'Pescado a la veracruzana', categoria: 'Comida', descripcion: 'Filetes de pescado horneados en salsa de jitomate, aceitunas, alcaparras y chiles güeros.', tiempoMin: 45, dificultad: 'Media', emoji: '🐟',
-    ingredientes: ['Filete de huachinango o pescado blanco|4 piezas|Proteínas', 'Jitomate|5 piezas|Verduras', 'Cebolla|1 pieza|Verduras', 'Ajo|2 dientes|Verduras', 'Aceitunas verdes|1/3 taza|Despensa', 'Alcaparras|2 cucharadas|Despensa', 'Chile güero en vinagre|4 piezas|Chiles', 'Orégano seco|1 cucharadita|Especias', 'Aceite de oliva|2 cucharadas|Despensa'],
+    ingredientes: ['Filete de huachinango o pescado blanco|4 piezas|Proteínas', 'Jitomate|5 piezas|Verduras', 'Cebolla|1 pieza|Verduras', 'Ajo|2 dientes|Verduras', 'Aceitunas verdes o negras|1/3 taza|Despensa', 'Alcaparras|2 cucharadas|Despensa', 'Chile güero en vinagre|4 piezas|Chiles', 'Orégano seco|1 cucharadita|Especias', 'Aceite de oliva|2 cucharadas|Despensa'],
     utensilios: ['Sartén amplio', 'Cuchillo', 'Tabla', 'Espátula', 'Refractario'], equipos: ['Estufa', 'Horno'],
-    preparacion: ['Seca los filetes y sazónalos por ambos lados con sal y pimienta. Pica jitomate, cebolla y ajo; corta las aceitunas si son grandes.', 'Sofríe cebolla y ajo en aceite hasta que estén suaves. Agrega jitomate, orégano y una pizca de sal; cocina de 12 a 15 minutos hasta formar una salsa espesa.', 'Incorpora aceitunas, alcaparras y chiles güeros. Coloca los filetes en un refractario y cúbrelos con la salsa y un poco de su líquido.', 'Hornea a 190 °C durante 12 a 18 minutos, según el grosor, hasta que el pescado se desmenuce fácilmente y esté opaco al centro. Sirve con arroz blanco.'],
+    preparacion: ['Seca los filetes y sazónalos por ambos lados con sal y pimienta. Pica jitomate, cebolla y ajo; corta las aceitunas verdes o negras si son grandes.', 'Sofríe cebolla y ajo en aceite hasta que estén suaves. Agrega jitomate, orégano y una pizca de sal; cocina de 12 a 15 minutos hasta formar una salsa espesa.', 'Incorpora aceitunas, alcaparras y chiles güeros. Coloca los filetes en un refractario y cúbrelos con la salsa y un poco de su líquido.', 'Hornea a 190 °C durante 12 a 18 minutos, según el grosor, hasta que el pescado se desmenuce fácilmente y esté opaco al centro. Sirve con arroz blanco.'],
   }),
   crearRecetaExtra({
     id: 57, nombre: 'Barbacoa de res estilo Hidalgo', categoria: 'Comida', descripcion: 'Res sazonada con adobo de chile, envuelta y cocida lentamente hasta quedar muy suave.', tiempoMin: 240, dificultad: 'Avanzada', emoji: '🥩',
@@ -384,7 +384,7 @@ export const RECETAS_EXTRA: Receta[] = [
   }),
   crearRecetaExtra({
     id: 138, nombre: 'Alegrías de amaranto', categoria: 'Postre', descripcion: 'Barras tradicionales de amaranto inflado unidas con miel de piloncillo y semillas.', tiempoMin: 35, dificultad: 'Media', emoji: '🍯',
-    ingredientes: ['Amaranto inflado|4 tazas|Cereales', 'Piloncillo|200 g|Despensa', 'Miel de abeja|2 cucharadas|Despensa', 'Agua|1/3 taza|Despensa', 'Cacahuate tostado|1/2 taza|Semillas', 'Pepitas|1/3 taza|Semillas', 'Pasas|1/3 taza|Frutas secas', 'Limón|1 cucharadita de jugo|Frutas'],
+    ingredientes: ['Amaranto inflado|4 tazas|Cereales', 'Piloncillo|200 g|Despensa', 'Miel de abeja|2 cucharadas|Despensa', 'Agua|1/3 taza|Despensa', 'Cacahuate tostado|1/2 taza|Semillas', 'Pepitas de girasol|1/3 taza|Semillas', 'Pasas|1/3 taza|Frutas secas', 'Limón|1 cucharadita de jugo|Frutas'],
     utensilios: ['Olla pequeña', 'Cuchara de madera', 'Tazón', 'Charola', 'Papel encerado'], equipos: ['Estufa'],
     preparacion: ['Engrasa ligeramente una charola y mezcla en un tazón el amaranto, cacahuate, pepitas y pasas.', 'Calienta piloncillo, agua, miel y jugo de limón en una olla; mueve hasta que el jarabe burbujee y se vuelva espeso. Para comprobarlo, deja caer una gota en agua fría: debe formar una bolita suave.', 'Retira del fuego y vierte el jarabe caliente sobre las semillas. Mezcla rápidamente con una cuchara firme para cubrir el amaranto antes de que endurezca.', 'Pasa la mezcla a la charola, presiónala con una espátula engrasada y marca cuadros con un cuchillo. Deja enfriar por completo y separa las barras.'],
   }),

@@ -1,5 +1,6 @@
 import type { CategoriaReceta, Receta } from './recetas';
 import { BEBIDAS_EXPANSION } from './bebidas-expansion';
+import { unificarIngredientesReceta } from './ingredientes';
 
 const CATEGORIAS_DE_PLATILLO: CategoriaReceta[] = [
   'Desayuno',
@@ -565,7 +566,10 @@ const BEBIDAS_BASE: Receta[] = [
   },
 ];
 
-export const BEBIDAS: Receta[] = [...BEBIDAS_BASE, ...BEBIDAS_EXPANSION];
+export const BEBIDAS: Receta[] = [...BEBIDAS_BASE, ...BEBIDAS_EXPANSION].map((item) => ({
+  ...item,
+  ingredientes: unificarIngredientesReceta(item.ingredientes),
+}));
 
 export const obtenerBebidasParaAcompanamiento = (categoria: CategoriaReceta) =>
   BEBIDAS.filter((bebida) => bebida.acompanamientoPara?.includes(categoria));
