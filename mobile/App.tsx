@@ -16,6 +16,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import {
   CATEGORIAS_RECETA,
@@ -27,6 +28,12 @@ import { claveIngredienteGeneral, nombreIngredienteGeneral } from './src/data/in
 import { BEBIDAS } from './src/data/bebidas';
 
 const CATALOGO_COMPLETO: Receta[] = [...RECETAS, ...BEBIDAS];
+const RECETA_POR_NOMBRE = new Map(CATALOGO_COMPLETO.map((receta) => [receta.nombre, receta]));
+const FAVORITOS_STORAGE_KEY = '@sabor-de-casa/favoritos';
+const CANTIDAD_RECETAS_POR_CATEGORIA = new Map<CategoriaReceta, number>(CATEGORIAS_RECETA.map((categoria) => [
+  categoria,
+  CATALOGO_COMPLETO.reduce((total, receta) => total + Number(receta.categoria === categoria), 0),
+]));
 const ingredientesPorClave = new Map<string, { nombre: string; categoria: string; alternativas: Set<string> }>();
 CATALOGO_COMPLETO.flatMap((receta) => receta.ingredientes).forEach((ingrediente) => {
   const nombre = nombreIngredienteGeneral(ingrediente.nombre);
@@ -154,7 +161,7 @@ const IngredienteOpcion = React.memo(({
   </TouchableOpacity>
 ));
 
-type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'opiniones' | 'contacto';
+type Pantalla = 'inicio' | 'ingredientes' | 'resultados' | 'detalle' | 'catalogo' | 'favoritos' | 'opiniones' | 'contacto';
 type DificultadReceta = Receta['dificultad'];
 type Opinion = {
   id_opinion: number;
@@ -210,6 +217,7 @@ export default function App() {
   const detalleScrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const scrollPendienteRecetaRef = useRef<number | null>(null);
   const solicitudRecomendacionesRef = useRef(0);
+  const favoritosModificadosAntesDeCargarRef = useRef(false);
 
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [pantallaAnterior, setPantallaAnterior] = useState<Pantalla>('inicio');
@@ -217,6 +225,8 @@ export default function App() {
     string[]
   >([]);
   const [ingredientesBaseDatos, setIngredientesBaseDatos] = useState<IngredienteBaseDatos[]>([]);
+  const [favoritosNombres, setFavoritosNombres] = useState<string[]>([]);
+  const [favoritosCargados, setFavoritosCargados] = useState(false);
   const [recetaSeleccionada, setRecetaSeleccionada] =
     useState<ResultadoReceta | null>(null);
   const [busquedaIngrediente, setBusquedaIngrediente] = useState('');
@@ -250,6 +260,51 @@ export default function App() {
     inputRange: [0, 1],
     outputRange: ['0deg', '720deg'],
   });
+
+  useEffect(() => {
+    let vigente = true;
+    void (async () => {
+      try {
+        const guardados = await AsyncStorage.getItem(FAVORITOS_STORAGE_KEY);
+        if (!vigente) return;
+        const nombresGuardados: string[] = guardados ? (() => {
+          try {
+            const valor: unknown = JSON.parse(guardados);
+            return Array.isArray(valor)
+              ? valor.filter((nombre): nombre is string => typeof nombre === 'string' && RECETA_POR_NOMBRE.has(nombre))
+              : [];
+          } catch {
+            return [];
+          }
+        })() : [];
+        setFavoritosNombres((actuales) => favoritosModificadosAntesDeCargarRef.current
+          ? Array.from(new Set([...nombresGuardados, ...actuales]))
+          : nombresGuardados);
+      } catch {
+        // Los favoritos siguen disponibles durante esta sesión aunque falle el almacenamiento local.
+      } finally {
+        if (vigente) setFavoritosCargados(true);
+      }
+    })();
+    return () => { vigente = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!favoritosCargados) return;
+    void AsyncStorage.setItem(FAVORITOS_STORAGE_KEY, JSON.stringify(favoritosNombres)).catch(() => undefined);
+  }, [favoritosCargados, favoritosNombres]);
+
+  const alternarFavorito = useCallback((nombre: string) => {
+    if (!favoritosCargados) favoritosModificadosAntesDeCargarRef.current = true;
+    setFavoritosNombres((actuales) => actuales.includes(nombre)
+      ? actuales.filter((actual) => actual !== nombre)
+      : [...actuales, nombre]);
+  }, [favoritosCargados]);
+
+  const favoritosSet = useMemo(() => new Set(favoritosNombres), [favoritosNombres]);
+  const recetasFavoritas = useMemo(() => favoritosNombres
+    .map((nombre) => RECETA_POR_NOMBRE.get(nombre))
+    .filter((receta): receta is Receta => receta !== undefined), [favoritosNombres]);
 
   const cargarOpiniones = useCallback(async (nombreReceta: string | null = recetaOpinionNombre): Promise<boolean> => {
     setCargandoOpiniones(true);
@@ -299,6 +354,11 @@ export default function App() {
     }
 
     if (pantalla === 'catalogo') {
+      setPantalla('inicio');
+      return true;
+    }
+
+    if (pantalla === 'favoritos') {
       setPantalla('inicio');
       return true;
     }
@@ -821,7 +881,7 @@ export default function App() {
                 <Text style={styles.iconoCategoriaInicio}>{ICONO_CATEGORIA[categoria]}</Text>
                 <View style={styles.textoCategoriaInicio}>
                   <Text style={styles.nombreCategoriaInicio}>{categoria}</Text>
-                  <Text style={styles.cantidadCategoriaInicio}>{CATALOGO_COMPLETO.filter((item) => item.categoria === categoria).length} recetas</Text>
+                  <Text style={styles.cantidadCategoriaInicio}>{CANTIDAD_RECETAS_POR_CATEGORIA.get(categoria) ?? 0} recetas</Text>
                 </View>
                 <Text style={styles.flechaCategoriaInicio}>›</Text>
               </TouchableOpacity>
@@ -856,6 +916,21 @@ export default function App() {
             <Text style={styles.textoBotonDestacada}>Ver receta paso a paso  →</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={styles.tarjetaFavoritosInicio}
+          onPress={() => setPantalla('favoritos')}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={`Mis favoritos, ${favoritosNombres.length} recetas guardadas`}
+        >
+          <Text style={styles.iconoFavoritosInicio}>⭐</Text>
+          <View style={styles.infoFavoritosInicio}>
+            <Text style={styles.tituloAccionSocial}>Mis favoritos ({favoritosNombres.length})</Text>
+            <Text style={styles.textoAccionSocial}>Guarda recetas y vuelve a ellas cuando quieras.</Text>
+          </View>
+          <Text style={styles.flechaFavoritosInicio}>›</Text>
+        </TouchableOpacity>
 
         <View style={styles.filaAccionesSociales}>
           <TouchableOpacity style={styles.tarjetaAccionSocial} onPress={() => abrirOpiniones()} activeOpacity={0.75} accessibilityRole="button">
@@ -1017,6 +1092,57 @@ export default function App() {
               <Text style={styles.ingredientesTarjetaCatalogo} numberOfLines={1}>{receta.ingredientes.map((item) => item.nombre).join(' · ')}</Text>
             </View>
           </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+
+  const mostrarFavoritos = () => (
+    <View style={styles.contenedorPantalla}>
+      {botonRegreso('Inicio', () => setPantalla('inicio'))}
+      {encabezado('Mis favoritos', 'Tus recetas guardadas para volver a prepararlas.')}
+      <FlatList
+        style={styles.listaDesplazable}
+        contentContainerStyle={styles.listaFavoritos}
+        data={recetasFavoritas}
+        keyExtractor={(receta) => receta.nombre}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        ListEmptyComponent={(
+          <View style={styles.mensajeVacio}>
+            <Text style={styles.emojiVacio}>⭐</Text>
+            <Text style={styles.tituloMensajeVacio}>Aún no guardas recetas</Text>
+            <Text style={styles.textoMensajeVacio}>Abre una receta y toca “Guardar en favoritos”.</Text>
+            <TouchableOpacity style={styles.botonPrincipal} onPress={() => setPantalla('catalogo')} accessibilityRole="button">
+              <Text style={styles.textoBotonPrincipal}>Explorar recetas</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        renderItem={({ item: receta }) => (
+          <View style={styles.tarjetaFavorita}>
+            <TouchableOpacity
+              style={styles.cuerpoTarjetaFavorita}
+              onPress={() => abrirDetalle(crearResultadoLocal(receta))}
+              activeOpacity={0.75}
+              accessibilityRole="button"
+              accessibilityLabel={`Abrir ${receta.nombre}`}
+            >
+              <Text style={styles.nombreTarjetaFavorita}>{receta.emoji}  {receta.nombre}</Text>
+              <Text style={styles.descripcionTarjetaCatalogo} numberOfLines={2}>{receta.descripcion}</Text>
+              <Text style={styles.metaTarjetaCatalogo}>⏱ {receta.tiempoMin} min  ·  {receta.porciones} porciones</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.botonQuitarFavorito}
+              onPress={() => alternarFavorito(receta.nombre)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Quitar ${receta.nombre} de favoritos`}
+            >
+              <Text style={styles.textoQuitarFavorito}>Quitar</Text>
+            </TouchableOpacity>
+          </View>
         )}
       />
     </View>
@@ -1286,15 +1412,15 @@ export default function App() {
     const promedioVisible = recetaOpinionNombre && promedioOpiniones
       ? promedioOpiniones
       : promedioCalculado;
-    const selectorEstrellas = (origen: string) => (
+    const selectorEstrellas = () => (
       <View style={styles.selectorEstrellas}>
         {[1, 2, 3, 4, 5].map((estrella) => (
           <TouchableOpacity
-            key={`${origen}-${estrella}`}
+            key={estrella}
             onPress={() => setCalificacionOpinion(estrella)}
             style={styles.botonEstrella}
             accessibilityRole="button"
-            accessibilityLabel={`${origen}: calificar con ${estrella} ${estrella === 1 ? 'estrella' : 'estrellas'}`}
+            accessibilityLabel={`Calificar con ${estrella} ${estrella === 1 ? 'estrella' : 'estrellas'}`}
             accessibilityState={{ selected: calificacionOpinion === estrella }}
           >
             <Text style={[styles.textoEstrella, estrella <= calificacionOpinion && styles.textoEstrellaActiva]}>{estrella <= calificacionOpinion ? '★' : '☆'}</Text>
@@ -1353,8 +1479,8 @@ export default function App() {
           <View style={styles.seccionDetalle}>
             <Text style={styles.tituloSeccion}>Comparte tu experiencia</Text>
             <Text style={styles.etiquetaFormulario}>Elige tu calificación</Text>
-            {selectorEstrellas('Primera calificación')}
-            <Text style={styles.promedioOpiniones}>Tu selección: {calificacionOpinion} de 5</Text>
+            {selectorEstrellas()}
+            <Text style={styles.promedioOpiniones}>Calificación seleccionada: {calificacionOpinion} de 5</Text>
             <TextInput
               value={nombreOpinion}
               onChangeText={setNombreOpinion}
@@ -1364,9 +1490,6 @@ export default function App() {
               maxLength={80}
               accessibilityLabel="Tu nombre para la opinión"
             />
-            <Text style={styles.etiquetaFormulario}>Tu calificación</Text>
-            {selectorEstrellas('Segunda calificación')}
-            <Text style={styles.notaFormulario}>Calificación elegida: {calificacionOpinion}/5. Al publicar, aparecerá junto a tu opinión.</Text>
             <TextInput
               value={textoOpinion}
               onChangeText={setTextoOpinion}
@@ -1713,6 +1836,18 @@ export default function App() {
           )}
 
           <TouchableOpacity
+            style={[styles.botonFavorito, favoritosSet.has(recetaActual.nombre) && styles.botonFavoritoActivo]}
+            onPress={() => alternarFavorito(recetaActual.nombre)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityState={{ selected: favoritosSet.has(recetaActual.nombre) }}
+          >
+            <Text style={styles.textoBotonFavorito}>
+              {favoritosSet.has(recetaActual.nombre) ? '★  Quitar de favoritos' : '☆  Guardar en favoritos'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.botonPrincipal}
             onPress={() => {
               setRecetaSeleccionada(null);
@@ -1746,6 +1881,7 @@ export default function App() {
       {pantalla === 'resultados' && mostrarResultados()}
       {pantalla === 'detalle' && mostrarDetalle()}
       {pantalla === 'catalogo' && mostrarCatalogo()}
+      {pantalla === 'favoritos' && mostrarFavoritos()}
       {pantalla === 'opiniones' && mostrarOpiniones()}
       {pantalla === 'contacto' && mostrarContacto()}
     </SafeAreaView>
@@ -2172,6 +2308,47 @@ const styles = StyleSheet.create({
 
   listaResultados: {
     paddingBottom: 24,
+  },
+
+  listaFavoritos: {
+    paddingHorizontal: 18,
+    paddingBottom: 28,
+    gap: 12,
+  },
+
+  tarjetaFavorita: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8DC',
+    padding: 15,
+    gap: 12,
+  },
+
+  cuerpoTarjetaFavorita: {
+    gap: 7,
+  },
+
+  nombreTarjetaFavorita: {
+    color: '#294D35',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+
+  botonQuitarFavorito: {
+    minHeight: 40,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D7E2D3',
+    paddingHorizontal: 14,
+  },
+
+  textoQuitarFavorito: {
+    color: '#526653',
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   tarjetaReceta: {
@@ -2778,6 +2955,57 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 12,
     marginBottom: 8,
+  },
+
+  tarjetaFavoritosInicio: {
+    minHeight: 78,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8DC',
+    padding: 15,
+    marginTop: 12,
+  },
+
+  iconoFavoritosInicio: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+
+  infoFavoritosInicio: {
+    flex: 1,
+  },
+
+  flechaFavoritosInicio: {
+    color: '#267348',
+    fontSize: 28,
+    marginLeft: 8,
+  },
+
+  botonFavorito: {
+    minHeight: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFF9E8',
+    borderColor: '#E9D8A6',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 16,
+  },
+
+  botonFavoritoActivo: {
+    backgroundColor: '#F5EBD0',
+  },
+
+  textoBotonFavorito: {
+    color: '#6C541A',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
   },
 
   tarjetaAccionSocial: {
