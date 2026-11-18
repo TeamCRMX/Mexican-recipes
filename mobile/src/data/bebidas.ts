@@ -1,5 +1,6 @@
 import type { CategoriaReceta, Receta } from './recetas';
 import { BEBIDAS_EXPANSION } from './bebidas-expansion';
+import { unificarIngredientesReceta } from './ingredientes';
 
 const CATEGORIAS_DE_PLATILLO: CategoriaReceta[] = [
   'Desayuno',
@@ -145,7 +146,7 @@ const BEBIDAS_BASE: Receta[] = [
   {
     id: 106,
     nombre: 'Champurrado',
-    descripcion: 'Bebida espesa de maíz, chocolate de mesa, canela y piloncillo, tradicional para acompañar tamales.',
+    descripcion: 'Bebida espesa de maíz, chocolate en barra, canela y piloncillo, tradicional para acompañar tamales.',
     categoria: 'Bebidas',
     tiempoMin: 30,
     porciones: 6,
@@ -156,7 +157,7 @@ const BEBIDAS_BASE: Receta[] = [
       { nombre: 'Agua natural', cantidad: '5 tazas', categoria: 'Bebidas' },
       { nombre: 'Canela', cantidad: '1 raja', categoria: 'Especias' },
       { nombre: 'Piloncillo', cantidad: '1 cono grande', categoria: 'Despensa' },
-      { nombre: 'Chocolate de mesa', cantidad: '1 tableta', categoria: 'Despensa' },
+      { nombre: 'Chocolate en barra', cantidad: '1 tableta', categoria: 'Despensa' },
       { nombre: 'Masa de maíz', cantidad: '1 taza', categoria: 'Cereales' },
     ],
     utensilios: ['Olla alta', 'Tazón', 'Batidor', 'Colador'],
@@ -565,7 +566,10 @@ const BEBIDAS_BASE: Receta[] = [
   },
 ];
 
-export const BEBIDAS: Receta[] = [...BEBIDAS_BASE, ...BEBIDAS_EXPANSION];
+export const BEBIDAS: Receta[] = [...BEBIDAS_BASE, ...BEBIDAS_EXPANSION].map((item) => ({
+  ...item,
+  ingredientes: unificarIngredientesReceta(item.ingredientes),
+}));
 
 export const obtenerBebidasParaAcompanamiento = (categoria: CategoriaReceta) =>
   BEBIDAS.filter((bebida) => bebida.acompanamientoPara?.includes(categoria));

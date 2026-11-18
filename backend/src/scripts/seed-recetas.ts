@@ -125,6 +125,8 @@ async function sembrarRecetas() {
       );
       const idReceta = guardada.rows[0].id_receta;
 
+      await cliente.query('DELETE FROM receta_ingrediente WHERE id_receta = $1', [idReceta]);
+
       for (const ingrediente of receta.ingredientes) {
         const guardado = await cliente.query<{ id_ingrediente: number }>(
           `INSERT INTO ingredientes (nombre, categoria)
